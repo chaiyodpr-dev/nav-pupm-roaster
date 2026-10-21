@@ -1221,7 +1221,6 @@ function parseExcel(arrayBuffer, filename) {
   document.getElementById('searchContent').innerHTML = '<p style="color:var(--text-muted);text-align:center;padding:24px">← เลือกชื่อพนักงานด้านบน</p>';
 
   renderTodayPanel();
-  computeMissingDays();
   showPersonSchedule();
   // Reset file input so same file can be re-uploaded if needed
   document.getElementById('fileInput').value = '';
@@ -1330,7 +1329,6 @@ function autoLoadFromGitHub() {
 autoLoadFromGitHub();
 
 renderTodayPanel();
-computeMissingDays();
 </script>
 </body>
 </html>
