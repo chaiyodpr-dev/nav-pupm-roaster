@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Version 58 -->
+<!-- Version 59 -->
 <html lang="th">
 <head>
 <meta charset="UTF-8">
@@ -323,7 +323,7 @@
 <body>
 
 <header>
-  <h1>📅 ตารางเวร ศภ.บภ ๑. (วช.บว.) <span style="font-size:0.65rem;opacity:0.6;font-weight:400">v58</span></h1>
+  <h1>📅 ตารางเวร ศภ.บภ ๑. (วช.บว.) <span style="font-size:0.65rem;opacity:0.6;font-weight:400">v59</span></h1>
   <p id="headerMonth">กรุณาอัปโหลดไฟล์ตารางเวร Excel</p>
 </header>
 
@@ -817,17 +817,15 @@ document.getElementById('fileInput').addEventListener('change', function(e) {
   loadSheetJS(() => {
     const reader = new FileReader();
     reader.onload = function(evt) {
-      try {
-        parseExcel(evt.target.result, file.name);
-      } catch(err) {
+      parseExcel(evt.target.result, file.name).catch(err => {
         document.getElementById('uploadStatus').textContent = 'เกิดข้อผิดพลาด: ' + err.message;
-      }
+      });
     };
     reader.readAsArrayBuffer(file);
   });
 });
 
-function parseExcel(arrayBuffer, filename) {
+async function parseExcel(arrayBuffer, filename) {
   const wb = XLSX.read(arrayBuffer, {type: 'array', cellStyles: true});
 
   // Find sheet รวมลา (last sheet) only
@@ -1313,8 +1311,8 @@ function autoLoadFromGitHub() {
   loadSheetJS(function() {
     fetch(SCHEDULE_XLSX_URL)
       .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.arrayBuffer(); })
-      .then(buf => {
-        parseExcel(buf, 'schedule.xlsx');
+      .then(async buf => {
+        await parseExcel(buf, 'schedule.xlsx');
         status.textContent = '✅ โหลดจาก GitHub สำเร็จ — กดปุ่มรีโหลดเพื่ออัปเดต';
         status.className = 'upload-status ok';
       })
