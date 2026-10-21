@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Version 59 -->
+<!-- Version 60 -->
 <html lang="th">
 <head>
 <meta charset="UTF-8">
@@ -323,7 +323,7 @@
 <body>
 
 <header>
-  <h1>📅 ตารางเวร ศภ.บภ ๑. (วช.บว.) <span style="font-size:0.65rem;opacity:0.6;font-weight:400">v59</span></h1>
+  <h1>📅 ตารางเวร ศภ.บภ ๑. (วช.บว.) <span style="font-size:0.65rem;opacity:0.6;font-weight:400">v60</span></h1>
   <p id="headerMonth">กรุณาอัปโหลดไฟล์ตารางเวร Excel</p>
 </header>
 
@@ -836,6 +836,9 @@ async function parseExcel(arrayBuffer, filename) {
   }
   const ws = wb.Sheets[wsName];
   const data = XLSX.utils.sheet_to_json(ws, {header: 1, defval: null, raw: true, blankrows: true});
+  // sheet_to_json เริ่ม index 0 ที่มุมซ้ายบนของ ws['!ref'] (ไฟล์นี้คือ B1:AI61 → index 0 = คอลัมน์ B)
+  const _rng = XLSX.utils.decode_range(ws['!ref'] || 'A1');
+  const RANGE_COL0 = _rng.s.c, RANGE_ROW0 = _rng.s.r;
 
   // ===== COLOR HELPERS =====
   // Build fill lookup from raw xlsx styles XML: xfIdx → {theme, tint, rgb}
@@ -977,7 +980,8 @@ async function parseExcel(arrayBuffer, filename) {
   function buildColorOverride(r3RowIndex, dayColMap) {
     const override = {};
     for (const [day, ci] of Object.entries(dayColMap)) {
-      const addr = colIdxToLetter(ci) + (r3RowIndex + 1); // SheetJS rows are 1-based in addresses
+      // data[][] index 0 = เริ่มที่ !ref (เช่น B1) ไม่ใช่ A1 → ต้องบวก offset ของ range
+      const addr = colIdxToLetter(ci + RANGE_COL0) + (r3RowIndex + RANGE_ROW0 + 1);
       const u = getCellColorUnit(addr);
       if (u) override[ci] = u;
     }
