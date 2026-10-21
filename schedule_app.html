@@ -553,7 +553,7 @@ function renderTodayPanel() {
     const s = emp.schedule[String(dayNum)];
     if (!s) continue;
     const dec = s.mainDecoded;
-    const rawStr = s.raw ? `r1:${s.raw.r1||'-'} r2:${s.raw.r2||'-'} r3:${s.raw.r3||'-'}` : '';
+    const rawStr = s.raw ? `r1:${s.raw.r1||'-'} r2:${s.raw.r2||'-'} r3:${s.raw.r3||'-'} main:${s.main||'-'} type:${dec?dec.type:'-'}` : '';
 
     if (s.update && s.update.type === 'leave') {
       // คนลา → ไม่แสดงในกะเลย (คนแทนจะขึ้นแทน)
