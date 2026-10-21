@@ -323,7 +323,7 @@
 <body>
 
 <header>
-  <h1>📅 ตารางเวร ศภ.บภ ๑. (วช.บว.) <span style="font-size:0.65rem;opacity:0.6;font-weight:400">v52</span></h1>
+  <h1>📅 ตารางเวร ศภ.บภ ๑. (วช.บว.) <span style="font-size:0.65rem;opacity:0.6;font-weight:400">v53</span></h1>
   <p id="headerMonth">กรุณาอัปโหลดไฟล์ตารางเวร Excel</p>
 </header>
 
@@ -829,7 +829,7 @@ function parseExcel(arrayBuffer, filename) {
     return;
   }
   const ws = wb.Sheets[wsName];
-  const data = XLSX.utils.sheet_to_json(ws, {header: 1, defval: null, raw: true});
+  const data = XLSX.utils.sheet_to_json(ws, {header: 1, defval: null, raw: true, blankrows: true});
 
   // ===== COLOR HELPERS =====
   // Build fill lookup from raw xlsx styles XML: xfIdx → {theme, tint, rgb}
