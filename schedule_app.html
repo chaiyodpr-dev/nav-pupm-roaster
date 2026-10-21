@@ -573,12 +573,11 @@ function renderTodayPanel() {
       } else {
         subNote = 'แทนเวร';
       }
-      // ถ้า main เป็น ORN/OKB → เพิ่มบริบทพักหมุนเวียน
-      if (dec && dec.type === 'off') {
-        const loc = dec.location || dec.raw || '';
-        if (loc) subNote += ` (พักหมุนเวียน${loc})`;
+      // ถ้า main เป็น ORN/OKB → บอกว่าพักหมุนเวียนที่ไหน (ใช้ location ไม่ใช่ raw)
+      if (dec && dec.type === 'off' && dec.location) {
+        subNote += ` (พักหมุนเวียน ${dec.location})`;
       }
-      // เวรหลักตัวเองเดิม (ก่อนอัพเดท) — แสดงเฉพาะเมื่อ main เป็น work
+      // เวรหลักตัวเองเดิม (ก่อนอัพเดท) — แสดงเฉพาะเมื่อ main เป็น work (ไม่ใช่ ORN/off)
       const origFullLbl = dec && dec.type === 'work' ? getShiftFullLabel(dec, s.main) : null;
       const worker = {name: emp.name, tagCls: subTagCls, fullLbl: subFullLbl, subNote, origFullLbl, rawStr};
       if (subDec.shift === 'M') mWorkers.push(worker);
