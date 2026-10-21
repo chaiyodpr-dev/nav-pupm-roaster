@@ -700,21 +700,40 @@ function showPersonSchedule() {
 
     if (s) {
       const dec = s.mainDecoded;
-      // Show leave in row2 first if present
       if (s.update && s.update.type === 'leave') {
-        html += `<span class="cal-shift cal-shift-O" title="ลา ${s.update.code}">O(${s.update.code})</span>`;
+        // คนลา → แสดง O(ลา) พร้อมเวรหลัก (เพื่อให้รู้ว่าลาเวรอะไร)
+        const leaveMainLbl = dec && dec.type === 'work' ? getShiftCellLabel(dec, s.main) : '';
+        const leaveTitle = `ลา ${s.update.code}${leaveMainLbl ? ` (เวร ${leaveMainLbl})` : ''}`;
+        html += `<span class="cal-shift cal-shift-O" title="${leaveTitle}">O(${s.update.code})</span>`;
+      } else if (s.update && s.update.type === 'sub') {
+        // คนแทนเวร → แสดงเวรแทนเป็นหลัก + เวรตัวเองเป็นรอง
+        const subLbl = getShiftCellLabel(s.update, s.update.raw);
+        const subFull = getShiftFullLabel(s.update, s.update.raw);
+        const sc = s.update.shift === 'M' || s.update.shift === 'N' ? 'cal-shift-repl' : 'cal-shift-O';
+        let subNote = '';
+        if (s.update.subReason === 'leave') subNote = ` แทน${s.update.leaveOf}`;
+        else if (s.update.subReason === 'vacancy') subNote = ` แทนว่าง(${s.update.vacancyUnit})`;
+        else subNote = ' แทนเวร';
+        html += `<span class="cal-shift ${sc}" title="${subFull}${subNote}">${subLbl}*</span>`;
+        // เวรหลักตัวเอง (ถ้ามี work แสดงเป็น secondary)
+        if (dec && dec.type === 'work') {
+          const uc = getUnitTagClass(dec);
+          const cls = uc === 'MRN' ? 'cal-shift-MRN' : uc === 'MKB' ? 'cal-shift-MKB' : uc === 'NKB' ? 'cal-shift-NKB' : `cal-shift-${dec.shift}`;
+          const cellLbl = getShiftCellLabel(dec, s.main);
+          html += `<span class="cal-shift ${cls}" style="opacity:0.45;font-size:0.7em" title="เวรเดิม: ${getShiftFullLabel(dec, s.main)}">${cellLbl}</span>`;
+        }
       } else if (dec && dec.type === 'work') {
+        // ปกติ ทำงานตามเวร
         const uc = getUnitTagClass(dec);
         const cellLbl = getShiftCellLabel(dec, s.main);
         const fullLbl = getShiftFullLabel(dec, s.main);
         const rawTip = (debugMode && s.raw) ? ` [r1:${s.raw.r1||'-'} r2:${s.raw.r2||'-'} r3:${s.raw.r3||'-'}]` : '';
         const cls = uc === 'MRN' ? 'cal-shift-MRN' : uc === 'MKB' ? 'cal-shift-MKB' : uc === 'NKB' ? 'cal-shift-NKB' : `cal-shift-${dec.shift}`;
         html += `<span class="cal-shift ${cls}" title="${fullLbl}${rawTip}">${cellLbl}${debugMode && s.raw ? `<br><span style="font-size:0.6rem;font-family:monospace;color:#64748b">${s.raw.r1||''}/${s.raw.r2||''}/${s.raw.r3||''}</span>` : ''}</span>`;
-        // Sub-shift from row2
-        if (s.update && s.update.type === 'sub') {
-          const subLbl = getShiftCellLabel(s.update, s.update.raw);
-          const sc = s.update.shift === 'M' || s.update.shift === 'N' ? 'cal-shift-repl' : 'cal-shift-O';
-          html += `<span class="cal-shift ${sc}" title="${getShiftFullLabel(s.update, s.update.raw)}">${subLbl}</span>`;
+        if (s.update && s.update.type === 'half') {
+          const h = s.update;
+          const halfWord = h.half === 1 ? '1' : '2';
+          html += `<span class="cal-shift cal-shift-repl" title="ทำต่อเนื่อง ช่วง${halfWord} ${h.unit}">+${h.unit}</span>`;
         }
       } else {
         // Off/ORN/other
@@ -734,13 +753,26 @@ function showPersonSchedule() {
     const s = emp.schedule[String(d)];
     if (!s) continue;
     const dec = s.mainDecoded;
-    if (dec && dec.type === 'work') {
+    if (s.update && s.update.type === 'leave') {
+      leaveCount++;
+      // ลา → นับตามเวรหลัก (เพื่อให้รู้ว่าขาดเวรอะไร)
+      if (dec && dec.type === 'work') {
+        if (dec.shift === 'M') mCount++;
+        else if (dec.shift === 'N') nCount++;
+        else oCount++;
+      } else oCount++;
+    } else if (s.update && s.update.type === 'sub') {
+      subCount++;
+      // แทนเวร → นับตามเวรที่ไปแทน ไม่ใช่เวรหลัก
+      const subShift = s.update.shift;
+      if (subShift === 'M') mCount++;
+      else if (subShift === 'N') nCount++;
+      else oCount++;
+    } else if (dec && dec.type === 'work') {
       if (dec.shift === 'M') mCount++;
       else if (dec.shift === 'N') nCount++;
       else oCount++;
     } else oCount++;
-    if (s.update && s.update.type === 'leave') leaveCount++;
-    if (s.update && s.update.type === 'sub') subCount++;
   }
   html += `<div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:8px;">
     <div class="tag tag-M">M: ${mCount} วัน</div>
