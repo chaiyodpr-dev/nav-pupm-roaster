@@ -323,7 +323,7 @@
 <body>
 
 <header>
-  <h1>📅 ตารางเวร ศภ.บภ ๑. (วช.บว.) <span style="font-size:0.65rem;opacity:0.6;font-weight:400">v54</span></h1>
+  <h1>📅 ตารางเวร ศภ.บภ ๑. (วช.บว.) <span style="font-size:0.65rem;opacity:0.6;font-weight:400">v55</span></h1>
   <p id="headerMonth">กรุณาอัปโหลดไฟล์ตารางเวร Excel</p>
 </header>
 
@@ -575,7 +575,7 @@ function renderTodayPanel() {
       }
       // กฎ: ถ้าแถว 3 ระบุ MRN/ORN → เวรหลัก r1 ไม่มีความหมายแล้ว ไม่แสดง "เดิม" ใดๆ
       // origFullLbl แสดงเฉพาะเมื่อ main เป็น work ธรรมดา (ไม่ใช่ Mr/ORN ที่มาจากแถว 3)
-      const mainIsRNOverride = (s.main === 'ORN' || s.main === 'Mr') && !s.unitOverride;
+      const mainIsRNOverride = s.main === 'O' && s.unitOverride == null || s.main === 'Mr';
       const origFullLbl = (!mainIsRNOverride && dec && dec.type === 'work') ? getShiftFullLabel(dec, s.main) : null;
       const worker = {name: emp.name, tagCls: subTagCls, fullLbl: subFullLbl, subNote, origFullLbl, rawStr};
       if (subDec.shift === 'M') mWorkers.push(worker);
@@ -1140,8 +1140,9 @@ function parseExcel(arrayBuffer, filename) {
           // ถ้าไม่มีข้อความ → ดูสีเซลล์
           const colUnit = colorOvr[ci];
           if (colUnit) {
-            // สีแถบ → override unit เท่านั้น เก็บเวรหลัก (main) จาก r1 ไว้
-            unitOverride = colUnit;
+            if (colUnit === 'ORN') { main = 'O'; }           // หยุด — ยกเลิกเวรหลัก
+            else if (colUnit === 'MRN') { main = 'Mr'; }     // เวรหมุนเวียนระนอง
+            else { unitOverride = colUnit; }                  // วฟ./กระบี่ → unit override เท่านั้น
           }
         }
 
