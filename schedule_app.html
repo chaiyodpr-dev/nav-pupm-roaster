@@ -573,12 +573,10 @@ function renderTodayPanel() {
       } else {
         subNote = 'แทนเวร';
       }
-      // ถ้า main เป็น ORN/OKB → บอกว่าพักหมุนเวียนที่ไหน (ใช้ location ไม่ใช่ raw)
-      if (dec && dec.type === 'off' && dec.location) {
-        subNote += ` (พักหมุนเวียน ${dec.location})`;
-      }
-      // เวรหลักตัวเองเดิม (ก่อนอัพเดท) — แสดงเฉพาะเมื่อ main เป็น work (ไม่ใช่ ORN/off)
-      const origFullLbl = dec && dec.type === 'work' ? getShiftFullLabel(dec, s.main) : null;
+      // กฎ: ถ้าแถว 3 ระบุ MRN/ORN → เวรหลัก r1 ไม่มีความหมายแล้ว ไม่แสดง "เดิม" ใดๆ
+      // origFullLbl แสดงเฉพาะเมื่อ main เป็น work ธรรมดา (ไม่ใช่ Mr/ORN ที่มาจากแถว 3)
+      const mainIsRNOverride = s.main === 'ORN' || s.main === 'Mr';
+      const origFullLbl = (!mainIsRNOverride && dec && dec.type === 'work') ? getShiftFullLabel(dec, s.main) : null;
       const worker = {name: emp.name, tagCls: subTagCls, fullLbl: subFullLbl, subNote, origFullLbl, rawStr};
       if (subDec.shift === 'M') mWorkers.push(worker);
       if (subDec.shift === 'N') nWorkers.push(worker);
@@ -714,8 +712,9 @@ function showPersonSchedule() {
         else if (s.update.subReason === 'vacancy') subNote = ` แทนว่าง(${s.update.vacancyUnit})`;
         else subNote = ' แทนเวร';
         html += `<span class="cal-shift ${sc}" title="${subFull}${subNote}">${subLbl}*</span>`;
-        // เวรหลักตัวเอง (ถ้ามี work แสดงเป็น secondary)
-        if (dec && dec.type === 'work') {
+        // เวรหลักจางๆ — แสดงเฉพาะ work ปกติ, ถ้า MRN/ORN (แถว 3) ไม่แสดง r1 เดิม
+        const calMainIsRNOverride = s.main === 'ORN' || s.main === 'Mr';
+        if (!calMainIsRNOverride && dec && dec.type === 'work') {
           const uc = getUnitTagClass(dec);
           const cls = uc === 'MRN' ? 'cal-shift-MRN' : uc === 'MKB' ? 'cal-shift-MKB' : uc === 'NKB' ? 'cal-shift-NKB' : `cal-shift-${dec.shift}`;
           const cellLbl = getShiftCellLabel(dec, s.main);
