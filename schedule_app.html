@@ -334,7 +334,7 @@
     <div>📂 อัปโหลดไฟล์ตารางเวร (.xlsx / .xlsm)</div>
     <div style="margin: 12px 0; display:flex; flex-wrap:wrap; gap:10px; align-items:center;">
       <label class="upload-btn" for="fileInput" style="cursor:pointer;">📂 เลือกไฟล์</label>
-      <input type="file" id="fileInput" accept=".xlsx,.xlsm">
+      <input type="file" id="fileInput" accept=".xlsx">
       <button id="checkBtn" onclick="openCheckModal()" style="background:#0369a1;color:#fff;border:none;border-radius:10px;padding:9px 18px;font-size:0.92rem;font-family:inherit;cursor:pointer;font-weight:600;display:flex;align-items:center;gap:6px;">🔎 ตรวจสอบตารางเวร</button>
     </div>
     <div class="upload-status" id="uploadStatus">รองรับไฟล์ .xlsx และ .xlsm</div>
@@ -797,6 +797,12 @@ function loadSheetJS(callback) {
 document.getElementById('fileInput').addEventListener('change', function(e) {
   const file = e.target.files[0];
   if (!file) return;
+  if (!file.name.toLowerCase().endsWith('.xlsx')) {
+    document.getElementById('uploadStatus').textContent = '❌ รองรับเฉพาะไฟล์ .xlsx เท่านั้น (ไม่รับ .xlsm)';
+    document.getElementById('uploadStatus').className = 'upload-status error';
+    document.getElementById('fileInput').value = '';
+    return;
+  }
   document.getElementById('uploadStatus').textContent = 'กำลังโหลด...';
   document.getElementById('uploadStatus').className = 'upload-status';
 
