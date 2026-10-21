@@ -1,0 +1,1336 @@
+<!DOCTYPE html>
+<!-- Version 51 -->
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ตารางเวร ศภ.บภ ๑.</title>
+<style>
+  :root {
+    --bg: #f0f4f8;
+    --card: #ffffff;
+    --primary: #1e40af;
+    --primary-light: #3b82f6;
+    --accent: #0ea5e9;
+    --text: #1e293b;
+    --text-muted: #64748b;
+    --border: #e2e8f0;
+    --M: #16a34a;
+    --M-bg: #dcfce7;
+    --N: #7c3aed;
+    --N-bg: #ede9fe;
+    --O: #94a3b8;
+    --O-bg: #f1f5f9;
+    --Os: #94a3b8;
+    --Os-bg: #f1f5f9;
+    --yellow: #ca8a04;
+    --yellow-bg: #fef9c3;
+    --repl: #ea580c;
+    --repl-bg: #fff7ed;
+    --MRN: #0369a1;
+    --MRN-bg: #e0f2fe;
+    --MKB: #b45309;
+    --MKB-bg: #fef3c7;
+    --NKB: #92400e;
+    --NKB-bg: #fde68a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', 'Noto Sans Thai', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+  header {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+    color: white;
+    padding: 20px 24px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  }
+  header h1 { font-size: 1.3rem; font-weight: 700; }
+  header p { font-size: 0.85rem; opacity: 0.85; margin-top: 2px; }
+  .container { max-width: 900px; margin: 0 auto; padding: 20px 16px; }
+
+  /* Upload area */
+  .upload-section {
+    background: var(--card);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 20px;
+    border: 2px dashed var(--border);
+    text-align: center;
+    transition: border-color 0.2s;
+  }
+  .upload-section:hover { border-color: var(--primary-light); }
+  .upload-section.loaded { border-style: solid; border-color: #16a34a; }
+  .upload-btn {
+    display: inline-block;
+    background: var(--primary);
+    color: white;
+    padding: 10px 24px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.95rem;
+    transition: background 0.2s;
+  }
+  .upload-btn:hover { background: var(--primary-light); }
+  #fileInput { display: none; }
+  .upload-status { margin-top: 10px; font-size: 0.9rem; color: var(--text-muted); }
+  .upload-status.ok { color: #16a34a; }
+
+  /* Tabs */
+  .tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+  }
+  .tab {
+    flex: 1;
+    padding: 12px;
+    border-radius: 10px;
+    border: 2px solid var(--border);
+    background: var(--card);
+    cursor: pointer;
+    text-align: center;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    transition: all 0.2s;
+  }
+  .tab.active {
+    border-color: var(--primary);
+    color: var(--primary);
+    background: #eff6ff;
+  }
+
+  /* Panels */
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  /* Today panel */
+  .date-display {
+    background: var(--card);
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin-bottom: 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .date-info h2 { font-size: 1.2rem; color: var(--primary); }
+  .date-info p { color: var(--text-muted); font-size: 0.85rem; margin-top: 2px; }
+  .date-nav { display: flex; gap: 8px; }
+  .date-nav button {
+    padding: 8px 16px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--card);
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: all 0.2s;
+  }
+  .date-nav button:hover { background: var(--bg); }
+  .date-nav button.active-btn { background: var(--primary); color: white; border-color: var(--primary); }
+
+  .shift-section {
+    background: var(--card);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+  .shift-section h3 {
+    font-size: 1rem;
+    font-weight: 700;
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .shift-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    font-weight: 700;
+    font-size: 0.85rem;
+  }
+  .badge-M { background: var(--M-bg); color: var(--M); }
+  .badge-N { background: var(--N-bg); color: var(--N); }
+  .badge-O { background: var(--O-bg); color: var(--O); }
+
+  .person-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .person-row:last-child { border-bottom: none; }
+  .person-name { flex: 1; font-size: 0.95rem; }
+  .person-tags { display: flex; gap: 6px; flex-wrap: wrap; }
+  .tag {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 0.78rem;
+    font-weight: 600;
+  }
+  .tag-M { background: var(--M-bg); color: var(--M); }
+  .tag-N { background: var(--N-bg); color: var(--N); }
+  .tag-O { background: #f3f4f6; color: #6b7280; }
+  .tag-repl { background: var(--repl-bg); color: var(--repl); }
+  .tag-MRN { background: var(--MRN-bg); color: var(--MRN); }
+  .tag-MKB { background: var(--MKB-bg); color: var(--MKB); }
+  .tag-NKB { background: var(--NKB-bg); color: var(--NKB); }
+  .tag-yellow { background: var(--yellow-bg); color: var(--yellow); }
+  .empty-msg { color: var(--text-muted); font-size: 0.9rem; padding: 8px 0; }
+
+  /* Search panel */
+  .search-box {
+    background: var(--card);
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin-bottom: 16px;
+  }
+  .search-box label { display: block; margin-bottom: 8px; font-weight: 600; font-size: 0.9rem; }
+  .search-box select {
+    width: 100%;
+    padding: 10px 14px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    font-size: 0.95rem;
+    font-family: inherit;
+    color: var(--text);
+    background: var(--bg);
+  }
+
+  /* Calendar view */
+  .cal-header {
+    background: var(--card);
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin-bottom: 16px;
+  }
+  .cal-header h3 { font-size: 1rem; font-weight: 700; color: var(--primary); margin-bottom: 4px; }
+  .cal-header p { font-size: 0.85rem; color: var(--text-muted); }
+
+  .cal-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+    margin-bottom: 16px;
+  }
+  .cal-day-name {
+    text-align: center;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    padding: 6px 0;
+  }
+  .cal-day-name.sun { color: #dc2626; }
+  .cal-day-name.sat { color: #2563eb; }
+  .cal-cell {
+    background: var(--card);
+    border-radius: 8px;
+    padding: 6px;
+    min-height: 64px;
+    border: 1px solid var(--border);
+    position: relative;
+    font-size: 0.78rem;
+  }
+  .cal-cell.empty { background: transparent; border-color: transparent; }
+  .cal-cell.today { border-color: var(--primary); border-width: 2px; }
+  .cal-day-num {
+    font-size: 0.8rem;
+    font-weight: 700;
+    margin-bottom: 3px;
+    color: var(--text);
+  }
+  .cal-cell.sun .cal-day-num { color: #dc2626; }
+  .cal-cell.sat .cal-day-num { color: #2563eb; }
+  .cal-shift {
+    display: inline-block;
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    margin-top: 1px;
+  }
+  .cal-shift-M { background: var(--M-bg); color: var(--M); }
+  .cal-shift-N { background: var(--N-bg); color: var(--N); }
+  .cal-shift-O { background: var(--O-bg); color: var(--O); font-weight: 400; }
+  .cal-shift-repl { background: var(--repl-bg); color: var(--repl); }
+  .cal-shift-MRN { background: var(--MRN-bg); color: var(--MRN); }
+  .cal-shift-MKB { background: var(--MKB-bg); color: var(--MKB); }
+  .cal-shift-NKB { background: var(--NKB-bg); color: var(--NKB); }
+  .cal-shift-yellow { background: var(--yellow-bg); color: var(--yellow); }
+  .cal-shifts-list { display: flex; flex-direction: column; gap: 1px; }
+
+  /* Legend */
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 16px;
+    padding: 12px 16px;
+    background: var(--card);
+    border-radius: 10px;
+  }
+  .legend-item { display: flex; align-items: center; gap: 5px; font-size: 0.8rem; }
+
+
+  /* Debug Mode */
+  .debug-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 16px;
+    background: #1e293b;
+    border-radius: 10px;
+    margin-bottom: 16px;
+    font-size: 0.85rem;
+    color: #94a3b8;
+  }
+  .debug-bar label { display: flex; align-items: center; gap: 6px; cursor: pointer; color: #e2e8f0; font-weight: 600; }
+  .debug-toggle { cursor: pointer; width: 16px; height: 16px; }
+  .debug-raw {
+    display: none;
+    margin-top: 4px;
+    font-family: monospace;
+    font-size: 0.72rem;
+    background: #1e293b;
+    color: #7dd3fc;
+    padding: 2px 6px;
+    border-radius: 4px;
+    letter-spacing: 0.03em;
+  }
+  body.debug-on .debug-raw { display: inline-block; }
+  /* Loading */
+  .loading { text-align: center; padding: 40px; color: var(--text-muted); }
+
+  @media (max-width: 480px) {
+    .cal-grid { grid-template-columns: repeat(7, 1fr); gap: 2px; }
+    .cal-cell { padding: 3px; min-height: 52px; }
+    .cal-day-num { font-size: 0.72rem; }
+    .cal-shift { font-size: 0.62rem; padding: 1px 3px; }
+    .tabs { flex-direction: column; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>📅 ตารางเวร ศภ.บภ ๑. (วช.บว.) <span style="font-size:0.65rem;opacity:0.6;font-weight:400">v56</span></h1>
+  <p id="headerMonth">กรุณาอัปโหลดไฟล์ตารางเวร Excel</p>
+</header>
+
+<div class="container">
+
+  <!-- Upload Section -->
+  <div class="upload-section" id="uploadSection">
+    <div>📂 อัปโหลดไฟล์ตารางเวร (.xlsx / .xlsm)</div>
+    <div style="margin: 12px 0; display:flex; flex-wrap:wrap; gap:10px; align-items:center;">
+      <button class="upload-btn" onclick="autoLoadFromGitHub()" style="cursor:pointer;">🔄 รีโหลดจาก GitHub</button>
+      <label class="upload-btn" for="fileInput" style="cursor:pointer;">📂 อัปโหลดไฟล์เอง</label>
+      <input type="file" id="fileInput" accept=".xlsx">
+      <button id="checkBtn" onclick="openCheckModal()" style="background:#0369a1;color:#fff;border:none;border-radius:10px;padding:9px 18px;font-size:0.92rem;font-family:inherit;cursor:pointer;font-weight:600;display:flex;align-items:center;gap:6px;">🔎 ตรวจสอบตารางเวร</button>
+    </div>
+    <div class="upload-status" id="uploadStatus">รองรับไฟล์ .xlsx และ .xlsm</div>
+    <div id="lastUpdated" style="display:none;margin-top:6px;font-size:0.82rem;color:#0369a1;font-weight:600;"></div>
+  </div>
+
+  <!-- Check Modal -->
+  <div id="checkModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:999;overflow-y:auto;padding:20px;">
+    <div style="background:#fff;border-radius:16px;max-width:540px;margin:40px auto;padding:24px;box-shadow:0 8px 32px rgba(0,0,0,0.18);">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+        <h3 style="margin:0;color:#0369a1;font-size:1.1rem;">🔎 ตรวจสอบตารางเวรทั้งเดือน</h3>
+        <button onclick="document.getElementById('checkModal').style.display='none'" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:#64748b;line-height:1;">✕</button>
+      </div>
+      <div id="checkModalContent" style="font-size:0.92rem;line-height:1.7;"></div>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs" id="mainTabs" style="display:none">
+    <div class="tab active" onclick="switchTab('today')">🕐 วันนี้/พรุ่งนี้</div>
+    <div class="tab" onclick="switchTab('search')">🔍 ค้นหาบุคคล</div>
+  </div>
+
+  <!-- Today Panel -->
+  <div class="panel active" id="panel-today">
+    <div class="date-display">
+      <div class="date-info">
+        <h2 id="displayDate">-</h2>
+        <p id="displayMonth">-</p>
+      </div>
+      <div class="date-nav">
+        <button id="btnToday" class="active-btn" onclick="showDay('today')">วันนี้</button>
+        <button id="btnTomorrow" onclick="showDay('tomorrow')">พรุ่งนี้</button>
+        <input type="number" id="dayPicker" min="1" max="31" placeholder="วันที่" style="width:70px;padding:7px 10px;border-radius:8px;border:1px solid var(--border);font-size:0.9rem;font-family:inherit;" onchange="showDay('pick')" title="เลือกวันที่">
+      </div>
+    </div>
+
+
+  <!-- Debug Mode bar -->
+  <div class="debug-bar" id="debugBar">
+    <label><input type="checkbox" class="debug-toggle" id="debugToggle" onchange="toggleDebug(this.checked)"> 🐛 Debug Mode (แสดงรหัสดิบ)</label>
+    <span style="color:#475569;font-size:0.78rem">— แสดงค่า r1/r2/r3 จาก Excel ด้านล่างแต่ละชื่อ</span>
+  </div>
+    <div id="todayContent">
+      <div class="loading">กรุณาอัปโหลดไฟล์ตารางเวร</div>
+    </div>
+  </div>
+
+  <!-- Search Panel -->
+  <div class="panel" id="panel-search">
+    <div class="search-box">
+      <label>เลือกชื่อพนักงาน</label>
+      <select id="personSelect" onchange="showPersonSchedule()">
+        <option value="">-- กรุณาเลือก --</option>
+      </select>
+    </div>
+    <div id="missingDaysBox" style="display:none;margin-bottom:14px;padding:12px 16px;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;">
+      <div style="font-weight:700;color:#dc2626;margin-bottom:8px;font-size:0.95rem;">⚠️ วันที่เวรไม่ครบ (Mn/Me/Nn/Ne)</div>
+      <div id="missingDaysList" style="font-size:0.88rem;color:#7f1d1d;line-height:1.8;"></div>
+    </div>
+    <div id="searchContent"></div>
+  </div>
+
+</div>
+
+<script>
+// ============================================================
+// Schedule data (embedded from Excel parse)
+// ============================================================
+let scheduleData = null;
+
+// Thai days/months
+const THAI_DAYS = ['อาทิตย์','จันทร์','อังคาร','พุธ','พฤหัสบดี','ศุกร์','เสาร์'];
+const THAI_MONTHS = ['','มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+
+let currentView = 'today'; // 'today', 'tomorrow', or 'pick'
+let pickedDay = null;
+
+function switchTab(tab) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  event.target.classList.add('active');
+  document.getElementById('panel-' + tab).classList.add('active');
+}
+
+function showDay(which) {
+  currentView = which;
+  if (which === 'pick') {
+    const v = parseInt(document.getElementById('dayPicker').value);
+    pickedDay = (v >= 1 && v <= 31) ? v : null;
+  } else {
+    document.getElementById('dayPicker').value = '';
+  }
+  document.getElementById('btnToday').classList.toggle('active-btn', which === 'today');
+  document.getElementById('btnTomorrow').classList.toggle('active-btn', which === 'tomorrow');
+  renderTodayPanel();
+}
+
+// === Display helpers for new 2-char shift code system ===
+// mainDecoded: { type:'work', shift:'M'/'N', unit:'วช.'/'วฟ.'/'วส.'/'ระนอง'/'กระบี่', raw }
+//            | { type:'off', raw }  | { type:'leave', code:'VL'/'VC'/'PL'/'SL' }
+
+function getShiftClass(decoded) {
+  if (!decoded) return 'O';
+  if (decoded.type === 'work') {
+    if (decoded.shift === 'M') return 'M';
+    if (decoded.shift === 'N') return 'N';
+  }
+  return 'O';
+}
+
+// Short label shown on calendar cell
+function getShiftCellLabel(decoded, raw) {
+  if (!decoded) return raw || 'O';
+  if (decoded.type === 'work') {
+    const u = decoded.unit;
+    if (u === 'วช.') return decoded.shift + 'n';
+    if (u === 'วฟ.') return decoded.shift + 'e';
+    if (u === 'วส.') return decoded.shift + 'c';
+    if (u === 'ระนอง') return decoded.shift + 'r';
+    if (u === 'กระบี่') return decoded.shift + 'k';
+    return decoded.shift;
+  }
+  if (decoded.type === 'leave') return `O(${decoded.code})`;
+  if (decoded.type === 'off') {
+    if (decoded.unit === 'วฟ.') return 'Oe';
+    if (decoded.unit === 'กระบี่') return 'Ok';
+    if (decoded.unit === 'ระนอง') return 'Or';
+    return raw || 'O';
+  }
+  return raw || 'O';
+}
+
+// Full label shown in today panel: "Mn เวรเช้า วช."
+function getShiftFullLabel(decoded, raw) {
+  if (!decoded) return raw || 'O';
+  if (decoded.type === 'work') {
+    const shortCode = getShiftCellLabel(decoded, raw);
+    const shiftWord = decoded.shift === 'M' ? 'เวรเช้า' : 'เวรดึก';
+    const u = decoded.unit;
+    if (u === 'ระนอง') return `${shortCode} ${shiftWord} ระนอง`;
+    if (u === 'กระบี่') return `${shortCode} ${shiftWord} กระบี่`;
+    return `${shortCode} ${shiftWord} ${u}`;
+  }
+  if (decoded.type === 'leave') return `หยุด ลา (${decoded.code})`;
+  if (decoded.type === 'off' && decoded.unit) return `O หยุด (${decoded.unit})`;
+  if (decoded.type === 'off' && decoded.location) return `OFF (${decoded.location})`;
+  return raw || 'O';
+}
+
+// CSS class suffix for special locations
+function getUnitTagClass(decoded) {
+  if (!decoded || decoded.type !== 'work') return '';
+  const u = decoded.unit;
+  if (u === 'ระนอง') return 'MRN';
+  if (u === 'กระบี่') return decoded.shift === 'M' ? 'MKB' : 'NKB';
+  return decoded.shift; // 'M' or 'N'
+}
+
+
+let debugMode = false;
+function toggleDebug(on) {
+  debugMode = on;
+  if (on) document.body.classList.add('debug-on');
+  else document.body.classList.remove('debug-on');
+  renderTodayPanel();
+  showPersonSchedule();
+}
+
+function renderTodayPanel() {
+  if (!scheduleData) return;
+  const now = new Date();
+  const dataYearCE = scheduleData.year - 543;
+
+  let dayNum, dayLabel, thYear, targetMonth, dateStr, labelPrefix;
+
+  if (currentView === 'pick' && pickedDay) {
+    dayNum = pickedDay;
+    targetMonth = scheduleData.month;
+    const d = new Date(dataYearCE, scheduleData.month - 1, dayNum);
+    dayLabel = THAI_DAYS[d.getDay()];
+    thYear = dataYearCE + 543;
+    dateStr = `วัน${dayLabel}ที่ ${dayNum} ${THAI_MONTHS[scheduleData.month]} ${thYear}`;
+    labelPrefix = `วันที่ ${dayNum}`;
+  } else {
+    const target = new Date(now);
+    if (currentView === 'tomorrow') target.setDate(target.getDate() + 1);
+    targetMonth = target.getMonth() + 1;
+    const targetYear = target.getFullYear();
+    dayNum = target.getDate();
+    dayLabel = THAI_DAYS[target.getDay()];
+    thYear = targetYear + 543;
+    dateStr = `วัน${dayLabel}ที่ ${dayNum} ${THAI_MONTHS[target.getMonth()+1]} ${thYear}`;
+    labelPrefix = currentView === 'today' ? 'วันนี้' : 'พรุ่งนี้';
+    if (targetMonth !== scheduleData.month || targetYear !== dataYearCE) {
+      document.getElementById('displayDate').textContent = dateStr;
+      document.getElementById('displayMonth').textContent = `${labelPrefix} — ${scheduleData.month_name}`;
+      document.getElementById('todayContent').innerHTML = `
+        <div class="shift-section">
+          <div class="empty-msg">⚠️ ข้อมูลที่โหลดเป็นเดือน ${scheduleData.month_name} แต่วันที่เลือกคือเดือนอื่น กรุณาอัปโหลดไฟล์ตารางเดือนนั้น</div>
+        </div>`;
+      return;
+    }
+  }
+
+  document.getElementById('displayDate').textContent = dateStr;
+  document.getElementById('displayMonth').textContent = `${labelPrefix} — ${scheduleData.month_name}`;
+
+  // Collect M and N workers
+  // mWorkers/nWorkers = คนที่ปรากฏจริงในกะ (หลังอัพเดทแล้ว)
+  // คนลา → ไม่แสดงในกะ (ถูกแทนโดยคนอื่น)
+  // คนแทน → แสดงด้วยเวรแทน + หมายเหตุ
+  const mWorkers = [], nWorkers = [];
+
+  for (const emp of scheduleData.employees) {
+    const s = emp.schedule[String(dayNum)];
+    if (!s) continue;
+    const dec = s.mainDecoded;
+    const rawStr = s.raw ? `r1:${s.raw.r1||'-'} r2:${s.raw.r2||'-'} r3:${s.raw.r3||'-'} main:${s.main||'-'} type:${dec?dec.type:'-'}` : '';
+
+    if (s.update && s.update.type === 'leave') {
+      // คนลา → ไม่แสดงในกะเลย (คนแทนจะขึ้นแทน)
+      continue;
+    }
+
+    if (s.update && s.update.type === 'sub') {
+      // คนแทนเวร → แสดงด้วยเวรแทน
+      const subDec = s.update;
+      const subTagCls = 'tag-' + getUnitTagClass(subDec);
+      const subFullLbl = getShiftFullLabel(subDec, subDec.raw || subDec.shift);
+      let subNote = '';
+      if (s.update.subReason === 'leave') {
+        subNote = `แทน${s.update.leaveOf} ลา ${s.update.leaveCode || ''}`;
+      } else if (s.update.subReason === 'vacancy') {
+        subNote = `แทนตำแหน่งว่าง (${s.update.vacancyUnit})`;
+      } else {
+        subNote = 'แทนเวร';
+      }
+      // กฎ: ถ้าแถว 3 ระบุ MRN/ORN → เวรหลัก r1 ไม่มีความหมายแล้ว ไม่แสดง "เดิม" ใดๆ
+      // origFullLbl แสดงเฉพาะเมื่อ main เป็น work ธรรมดา (ไม่ใช่ Mr/ORN ที่มาจากแถว 3)
+      const mainIsRNOverride = s.main === 'O' && s.unitOverride == null || s.main === 'Mr';
+      const origFullLbl = (!mainIsRNOverride && dec && dec.type === 'work') ? getShiftFullLabel(dec, s.main) : null;
+      const worker = {name: emp.name, tagCls: subTagCls, fullLbl: subFullLbl, subNote, origFullLbl, rawStr};
+      if (subDec.shift === 'M') mWorkers.push(worker);
+      if (subDec.shift === 'N') nWorkers.push(worker);
+      continue;
+    }
+
+    // ปกติ ไม่มีอัพเดท (อาจมี half-shift เพิ่มเติม)
+    if (!dec || dec.type !== 'work') continue;
+    const tagCls = 'tag-' + getUnitTagClass(dec);
+    const fullLbl = getShiftFullLabel(dec, s.main);
+    // half-shift note: "ทำงานต่อเนื่อง ช่วงแรก/หลัง [unit] [time]"
+    let halfNote = null;
+    if (s.update && s.update.type === 'half') {
+      const h = s.update;
+      const halfWord = h.half === 1 ? 'ช่วงแรก' : 'ช่วงหลัง';
+      halfNote = `ทำงานต่อเนื่อง ${halfWord} ${h.unit} (${h.time})`;
+    }
+    const worker = {name: emp.name, tagCls, fullLbl, subNote: halfNote, origFullLbl: null, rawStr};
+    if (dec.shift === 'M') mWorkers.push(worker);
+    if (dec.shift === 'N') nWorkers.push(worker);
+  }
+
+  function renderWorkerRow(w) {
+    return `<div class="person-row">
+      <div class="person-name">${w.name}</div>
+      <div class="person-tags">
+        <span class="tag ${w.tagCls}">${w.fullLbl}</span>
+        ${w.subNote ? `<span style="font-size:0.82rem;color:#64748b;margin-left:6px">${w.subNote}</span>` : ''}
+        ${w.origFullLbl ? `<span style="font-size:0.78rem;color:#94a3b8;margin-left:4px">(เดิม ${w.origFullLbl})</span>` : ''}
+        ${w.rawStr ? `<span class="debug-raw">${w.rawStr}</span>` : ''}
+      </div>
+    </div>`;
+  }
+
+  let html = '';
+
+  // M shift
+  html += `<div class="shift-section">
+    <h3><span class="shift-badge badge-M">M</span> กะกลางวัน (06:30–18:30)</h3>`;
+  if (mWorkers.length === 0) {
+    html += `<div class="empty-msg">ไม่มีข้อมูล</div>`;
+  }
+  for (const w of mWorkers) html += renderWorkerRow(w);
+  html += `</div>`;
+
+  // N shift
+  html += `<div class="shift-section">
+    <h3><span class="shift-badge badge-N">N</span> กะกลางคืน (18:30–06:30)</h3>`;
+  if (nWorkers.length === 0) {
+    html += `<div class="empty-msg">ไม่มีข้อมูล</div>`;
+  }
+  for (const w of nWorkers) html += renderWorkerRow(w);
+  html += `</div>`;
+
+  document.getElementById('todayContent').innerHTML = html;
+}
+
+function showPersonSchedule() {
+  const idx = document.getElementById('personSelect').value;
+  if (idx === '') {
+    document.getElementById('searchContent').innerHTML = '';
+    return;
+  }
+  const emp = scheduleData.employees[parseInt(idx)];
+  if (!emp) return;
+
+  let html = `<div class="cal-header">
+    <h3>${emp.name}</h3>
+    <p>${scheduleData.month_name}</p>
+  </div>`;
+
+  // Legend
+  html += `<div class="legend">
+    <div class="legend-item"><span class="cal-shift cal-shift-M">M(n/e/c)</span> เวรเช้า</div>
+    <div class="legend-item"><span class="cal-shift cal-shift-N">N(n/e/c)</span> เวรดึก</div>
+    <div class="legend-item"><span class="cal-shift cal-shift-O">O</span> วันหยุด</div>
+    <div class="legend-item"><span class="cal-shift cal-shift-MRN">M(RN)</span> เวรเช้าระนอง</div>
+    <div class="legend-item"><span class="cal-shift cal-shift-MKB">M(KB)</span> เวรเช้ากระบี่</div>
+    <div class="legend-item"><span class="cal-shift cal-shift-NKB">N(KB)</span> เวรดึกกระบี่</div>
+    <div class="legend-item"><span class="cal-shift cal-shift-repl">แทนเวร</span> แทนเวร</div>
+  </div>`;
+
+  // Calendar grid
+  // Oct 2026: month=10, CE year = scheduleData.year - 543
+  const yearCE = scheduleData.year - 543;
+  const firstDay = new Date(yearCE, scheduleData.month - 1, 1).getDay(); // 0=Sun
+  const maxDay = scheduleData.max_day;
+
+  html += `<div class="cal-grid">`;
+  // Day names
+  ['อา','จ','อ','พ','พฤ','ศ','ส'].forEach((d, i) => {
+    const cls = i === 0 ? 'sun' : i === 6 ? 'sat' : '';
+    html += `<div class="cal-day-name ${cls}">${d}</div>`;
+  });
+  // Empty cells before day 1
+  for (let i = 0; i < firstDay; i++) {
+    html += `<div class="cal-cell empty"></div>`;
+  }
+
+  const today = new Date();
+  const todayDay = (today.getMonth()+1 === scheduleData.month && today.getFullYear() === yearCE) ? today.getDate() : -1;
+
+  for (let d = 1; d <= maxDay; d++) {
+    const dayOfWeek = (firstDay + d - 1) % 7;
+    const isSun = dayOfWeek === 0;
+    const isSat = dayOfWeek === 6;
+    const isToday = d === todayDay;
+    const s = emp.schedule[String(d)];
+
+    let cellClass = 'cal-cell';
+    if (isSun) cellClass += ' sun';
+    if (isSat) cellClass += ' sat';
+    if (isToday) cellClass += ' today';
+
+    html += `<div class="${cellClass}">`;
+    html += `<div class="cal-day-num">${d}</div>`;
+    html += `<div class="cal-shifts-list">`;
+
+    if (s) {
+      const dec = s.mainDecoded;
+      if (s.update && s.update.type === 'leave') {
+        // คนลา → แสดง O(ลา) พร้อมเวรหลัก (เพื่อให้รู้ว่าลาเวรอะไร)
+        const leaveMainLbl = dec && dec.type === 'work' ? getShiftCellLabel(dec, s.main) : '';
+        const leaveTitle = `ลา ${s.update.code}${leaveMainLbl ? ` (เวร ${leaveMainLbl})` : ''}`;
+        html += `<span class="cal-shift cal-shift-O" title="${leaveTitle}">O(${s.update.code})</span>`;
+      } else if (s.update && s.update.type === 'sub') {
+        // คนแทนเวร → แสดงเวรแทนเป็นหลัก + เวรตัวเองเป็นรอง
+        const subLbl = getShiftCellLabel(s.update, s.update.raw);
+        const subFull = getShiftFullLabel(s.update, s.update.raw);
+        const sc = s.update.shift === 'M' || s.update.shift === 'N' ? 'cal-shift-repl' : 'cal-shift-O';
+        let subNote = '';
+        if (s.update.subReason === 'leave') subNote = ` แทน${s.update.leaveOf}`;
+        else if (s.update.subReason === 'vacancy') subNote = ` แทนว่าง(${s.update.vacancyUnit})`;
+        else subNote = ' แทนเวร';
+        html += `<span class="cal-shift ${sc}" title="${subFull}${subNote}">${subLbl}*</span>`;
+        // เวรหลักจางๆ — แสดงเฉพาะ work ปกติ, ถ้า MRN/ORN (แถว 3) ไม่แสดง r1 เดิม
+        const calMainIsRNOverride = s.main === 'ORN' || s.main === 'Mr';
+        if (!calMainIsRNOverride && dec && dec.type === 'work') {
+          const uc = getUnitTagClass(dec);
+          const cls = uc === 'MRN' ? 'cal-shift-MRN' : uc === 'MKB' ? 'cal-shift-MKB' : uc === 'NKB' ? 'cal-shift-NKB' : `cal-shift-${dec.shift}`;
+          const cellLbl = getShiftCellLabel(dec, s.main);
+          html += `<span class="cal-shift ${cls}" style="opacity:0.45;font-size:0.7em" title="เวรเดิม: ${getShiftFullLabel(dec, s.main)}">${cellLbl}</span>`;
+        }
+      } else if (dec && dec.type === 'work') {
+        // ปกติ ทำงานตามเวร
+        const uc = getUnitTagClass(dec);
+        const cellLbl = getShiftCellLabel(dec, s.main);
+        const fullLbl = getShiftFullLabel(dec, s.main);
+        const rawTip = (debugMode && s.raw) ? ` [r1:${s.raw.r1||'-'} r2:${s.raw.r2||'-'} r3:${s.raw.r3||'-'}]` : '';
+        const cls = uc === 'MRN' ? 'cal-shift-MRN' : uc === 'MKB' ? 'cal-shift-MKB' : uc === 'NKB' ? 'cal-shift-NKB' : `cal-shift-${dec.shift}`;
+        html += `<span class="cal-shift ${cls}" title="${fullLbl}${rawTip}">${cellLbl}${debugMode && s.raw ? `<br><span style="font-size:0.6rem;font-family:monospace;color:#64748b">${s.raw.r1||''}/${s.raw.r2||''}/${s.raw.r3||''}</span>` : ''}</span>`;
+        if (s.update && s.update.type === 'half') {
+          const h = s.update;
+          const halfWord = h.half === 1 ? '1' : '2';
+          html += `<span class="cal-shift cal-shift-repl" title="ทำต่อเนื่อง ช่วง${halfWord} ${h.unit}">+${h.unit}</span>`;
+        }
+      } else {
+        // Off/ORN/other
+        const cellLbl2 = getShiftCellLabel(dec, s.main);
+        const fullLbl2 = getShiftFullLabel(dec, s.main);
+        html += `<span class="cal-shift cal-shift-O" title="${fullLbl2}">${cellLbl2}${debugMode && s.raw ? `<br><span style="font-size:0.6rem;font-family:monospace;color:#64748b">${s.raw.r1||''}/${s.raw.r2||''}/${s.raw.r3||''}</span>` : ''}</span>`;
+      }
+    }
+    html += `</div></div>`;
+  }
+  html += `</div>`;
+
+  // Summary table
+  html += `<div class="shift-section"><h3>สรุปเดือน</h3>`;
+  let mCount = 0, nCount = 0, oCount = 0, leaveCount = 0, subCount = 0;
+  for (let d = 1; d <= maxDay; d++) {
+    const s = emp.schedule[String(d)];
+    if (!s) continue;
+    const dec = s.mainDecoded;
+    if (s.update && s.update.type === 'leave') {
+      leaveCount++;
+      // ลา → นับตามเวรหลัก (เพื่อให้รู้ว่าขาดเวรอะไร)
+      if (dec && dec.type === 'work') {
+        if (dec.shift === 'M') mCount++;
+        else if (dec.shift === 'N') nCount++;
+        else oCount++;
+      } else oCount++;
+    } else if (s.update && s.update.type === 'sub') {
+      subCount++;
+      // แทนเวร → นับตามเวรที่ไปแทน ไม่ใช่เวรหลัก
+      const subShift = s.update.shift;
+      if (subShift === 'M') mCount++;
+      else if (subShift === 'N') nCount++;
+      else oCount++;
+    } else if (dec && dec.type === 'work') {
+      if (dec.shift === 'M') mCount++;
+      else if (dec.shift === 'N') nCount++;
+      else oCount++;
+    } else oCount++;
+  }
+  html += `<div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:8px;">
+    <div class="tag tag-M">M: ${mCount} วัน</div>
+    <div class="tag tag-N">N: ${nCount} วัน</div>
+    <div class="tag" style="background:var(--O-bg);color:var(--O)">O: ${oCount} วัน</div>
+    ${leaveCount > 0 ? `<div class="tag" style="background:#fef3c7;color:#92400e">ลา: ${leaveCount} วัน</div>` : ''}
+    ${subCount > 0 ? `<div class="tag tag-repl">แทนเวร: ${subCount} วัน</div>` : ''}
+  </div></div>`;
+
+  document.getElementById('searchContent').innerHTML = html;
+}
+
+// ============================================================
+// Excel parsing with SheetJS (XLSX)
+// ============================================================
+function loadSheetJS(callback) {
+  if (window.XLSX) { callback(); return; }
+  const s = document.createElement('script');
+  s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+  s.onload = callback;
+  document.head.appendChild(s);
+}
+
+document.getElementById('fileInput').addEventListener('change', function(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  if (!file.name.toLowerCase().endsWith('.xlsx')) {
+    document.getElementById('uploadStatus').textContent = '❌ รองรับเฉพาะไฟล์ .xlsx เท่านั้น (ไม่รับ .xlsm)';
+    document.getElementById('uploadStatus').className = 'upload-status error';
+    document.getElementById('fileInput').value = '';
+    return;
+  }
+  document.getElementById('uploadStatus').textContent = 'กำลังโหลด...';
+  document.getElementById('uploadStatus').className = 'upload-status';
+
+  loadSheetJS(() => {
+    const reader = new FileReader();
+    reader.onload = function(evt) {
+      try {
+        parseExcel(evt.target.result, file.name);
+      } catch(err) {
+        document.getElementById('uploadStatus').textContent = 'เกิดข้อผิดพลาด: ' + err.message;
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  });
+});
+
+function parseExcel(arrayBuffer, filename) {
+  const wb = XLSX.read(arrayBuffer, {type: 'array', cellStyles: true});
+
+  // Find sheet รวมลา (last sheet) only
+  const wsName = wb.SheetNames.find(n => n.trim() === 'รวมลา') || wb.SheetNames[wb.SheetNames.length - 1];
+  if (!wsName) {
+    document.getElementById('uploadStatus').textContent = `ไม่พบชีต "รวมลา" (พบชีต: ${wb.SheetNames.join(', ')})`;
+    return;
+  }
+  const ws = wb.Sheets[wsName];
+  const data = XLSX.utils.sheet_to_json(ws, {header: 1, defval: null, raw: true, blankrows: true});
+
+  // ===== COLOR HELPERS =====
+  // Build fill lookup from raw xlsx styles XML: xfIdx → {theme, tint, rgb}
+  // SheetJS cellStyles:true จะส่ง cell.s เป็น object ที่มี fgColor แต่บางไฟล์ส่งมาไม่ครบ
+  // สร้าง fallback โดย parse styles.xml เองจาก wb.Sheets ที่ SheetJS เก็บไว้
+  const COLOR_MAP = {
+    'FFFFE7FF': 'ORN',   // light purple → พักหมุนเวียนระนอง
+    'FFCAFFFE': 'MRN',   // light blue → ปฏิบัติงานระนอง
+    'FFFFFF99': 'วฟ.',   // light yellow → วฟ.
+  };
+  const IGNORE_RGB = 'FFFFF3CD';
+
+  // Parse styles XML to build xfIdx → fillColor map
+  const _xfFillMap = {};  // xfIdx → {theme, tint, rgb} or null
+  try {
+    const stylesXml = wb.Strings ? null : null; // placeholder
+    // SheetJS exposes raw files via wb.Workbook but styles via wb.SSF
+    // Best approach: use wb.Sheets raw XML data stored by SheetJS
+    // Actually SheetJS stores styles in wb.Workbook.Sheets / wb.Styles
+    // Fallback: parse arrayBuffer directly via JSZip-like approach
+    // We'll use the DOMParser on the raw XML bytes SheetJS keeps internally
+    if (wb.Styles && wb.Styles.Fills) {
+      // SheetJS Pro exposes this — try it
+      const fills = wb.Styles.Fills;
+      const xfs = wb.Styles.CellXf || [];
+      xfs.forEach((xf, idx) => {
+        const fi = xf.fillId || 0;
+        const fill = fills[fi];
+        if (fill && fill.fgColor) {
+          _xfFillMap[idx] = fill.fgColor;
+        }
+      });
+    }
+  } catch(e) {}
+
+  // Parse raw xlsx ZIP to get fill colors (most reliable)
+  // We already have arrayBuffer — reuse it
+  const _cellFillByAddr = {};  // 'C18' → {theme, tint, rgb}
+  try {
+    // Use JSZip if available, otherwise use XLSX.CFB
+    const zdata = new Uint8Array(arrayBuffer);
+    // XLSX has built-in zip reader
+    const cfb = XLSX.CFB ? XLSX.CFB.read(zdata, {type:'array'}) : null;
+    // Better: use XLSX.zip_to_files which is internal
+    // Actually simplest: parse using XLSX.read internals
+    // Use manual zip parse via XLSX.utils
+    // XLSX exposes zip via the workbook's vbaraw or via internal _zip
+    // Try _zip first (some builds expose it)
+    const _zip = wb._zip || (XLSX.utils._zip_read && XLSX.utils._zip_read(zdata));
+    if (_zip) {
+      const parseXml = (str) => new DOMParser().parseFromString(str, 'application/xml');
+      const getNs = (root) => root.documentElement.namespaceURI || 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
+
+      const stylesEntry = _zip.file('xl/styles.xml') || _zip.file('xl\\styles.xml');
+      const sheetEntry = _zip.file('xl/worksheets/sheet1.xml') || _zip.file('xl\\worksheets\\sheet1.xml');
+
+      if (stylesEntry && sheetEntry) {
+        const stylesStr = stylesEntry.asText ? stylesEntry.asText() : new TextDecoder().decode(stylesEntry);
+        const sheetStr = sheetEntry.asText ? sheetEntry.asText() : new TextDecoder().decode(sheetEntry);
+        const stylesDoc = parseXml(stylesStr);
+        const sheetDoc = parseXml(sheetStr);
+        const ns = getNs(stylesDoc);
+
+        // Parse fills list
+        const fillsList = [];
+        const fillsEl = stylesDoc.getElementsByTagNameNS(ns, 'fills')[0];
+        if (fillsEl) {
+          for (const fillEl of fillsEl.getElementsByTagNameNS(ns, 'fill')) {
+            const pf = fillEl.getElementsByTagNameNS(ns, 'patternFill')[0];
+            if (!pf || pf.getAttribute('patternType') === 'none' || pf.getAttribute('patternType') === 'gray125') {
+              fillsList.push(null); continue;
+            }
+            const fg = pf.getElementsByTagNameNS(ns, 'fgColor')[0];
+            if (!fg) { fillsList.push(null); continue; }
+            const themeAttr = fg.getAttribute('theme');
+            fillsList.push({
+              type: themeAttr !== null ? 'theme' : 'rgb',
+              theme: themeAttr !== null ? parseInt(themeAttr) : null,
+              tint: parseFloat(fg.getAttribute('tint') || '0'),
+              rgb: fg.getAttribute('rgb'),
+            });
+          }
+        }
+        // Parse xf → fillId
+        const xfFills = [];
+        const cellXfsEl = stylesDoc.getElementsByTagNameNS(ns, 'cellXfs')[0];
+        if (cellXfsEl) {
+          for (const xf of cellXfsEl.getElementsByTagNameNS(ns, 'xf')) {
+            xfFills.push(parseInt(xf.getAttribute('fillId') || '0'));
+          }
+        }
+        // Parse sheet cells
+        const sheetNs = sheetDoc.documentElement.namespaceURI;
+        for (const rowEl of sheetDoc.getElementsByTagNameNS(sheetNs, 'row')) {
+          for (const cellEl of rowEl.getElementsByTagNameNS(sheetNs, 'c')) {
+            const ref = cellEl.getAttribute('r');
+            const sAttr = cellEl.getAttribute('s');
+            if (!ref || sAttr === null) continue;
+            const xfIdx = parseInt(sAttr);
+            if (xfIdx < xfFills.length) {
+              const fi = xfFills[xfIdx];
+              if (fi < fillsList.length && fillsList[fi]) {
+                _cellFillByAddr[ref] = fillsList[fi];
+              }
+            }
+          }
+        }
+      }
+    }
+  } catch(e) { console.warn('Color XML parse error:', e); }
+
+  function fgColorToUnit(fill) {
+    if (!fill) return null;
+    if (fill.type === 'theme' || fill.theme !== undefined) {
+      const t = fill.theme;
+      const tint = fill.tint || 0;
+      if (t === 9) return 'กระบี่';
+      if (t === 1 && Math.abs(tint - 0.5) < 0.1) return 'ORN';  // Black Text1 Lighter50%
+      return null;
+    }
+    const rgb = (fill.rgb || fill.argb || '').toUpperCase();
+    if (!rgb || rgb === '00000000' || rgb === 'FFFFFFFF' || rgb === IGNORE_RGB) return null;
+    return COLOR_MAP[rgb] || null;
+  }
+
+  function getCellColorUnit(addr) {
+    // 1) Try raw XML fill map (most reliable, handles theme:1 tint:0.5)
+    if (_cellFillByAddr[addr]) return fgColorToUnit(_cellFillByAddr[addr]);
+    // 2) Fallback: SheetJS cell.s
+    const cell = ws[addr];
+    if (!cell || !cell.s) return null;
+    const fill = cell.s.fgColor || (cell.s.fill && cell.s.fill.fgColor);
+    return fgColorToUnit(fill);
+  }
+
+  // Decode Excel column index to A1-style address
+  function colIdxToLetter(idx) {
+    let s = '';
+    let n = idx + 1;
+    while (n > 0) { const r = (n - 1) % 26; s = String.fromCharCode(65 + r) + s; n = Math.floor((n - 1) / 26); }
+    return s;
+  }
+
+  // Build color override map: for each employee's r3 row, propagate color across consecutive same-color cells
+  // Returns: Map<colIndex, colorUnit>  (built fresh per employee in loop below)
+  function buildColorOverride(r3RowIndex, dayColMap) {
+    const override = {};
+    for (const [day, ci] of Object.entries(dayColMap)) {
+      const addr = colIdxToLetter(ci) + (r3RowIndex + 1); // SheetJS rows are 1-based in addresses
+      const u = getCellColorUnit(addr);
+      if (u) override[ci] = u;
+    }
+    return override;
+  }
+
+  // ===== HELPERS =====
+
+  // Extract month/year from title rows
+  let monthName = 'ไม่ทราบเดือน', month = 0, year = 0;
+  const thMonthNames = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+  const thMonthAbbr = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  for (const row of data) {
+    for (const cell of (row||[])) {
+      if (cell && typeof cell === 'string' && cell.includes('ตาราง')) {
+        const m = cell.match(/(\d{4})/);
+        if (m) year = parseInt(m[1]);
+        for (let mi = 0; mi < thMonthNames.length; mi++) {
+          if (cell.includes(thMonthNames[mi]) || cell.includes(thMonthAbbr[mi])) { month = mi+1; break; }
+        }
+        if (year && month) break;
+      }
+    }
+    if (year && month) break;
+  }
+  if (year > 0 && month > 0) monthName = THAI_MONTHS[month] + ' ' + year;
+
+  // Day header row: has >=10 numbers 1-31
+  function isDayHeaderRow(r) {
+    return (r||[]).filter(c => typeof c === 'number' && c >= 1 && c <= 31).length >= 10;
+  }
+  function buildDayColMap(r) {
+    const m = {};
+    (r||[]).forEach((cell, ci) => { if (typeof cell === 'number' && cell >= 1 && cell <= 31) m[cell] = ci; });
+    return m;
+  }
+
+  // Employee row: has Thai name prefix or Thai numeral+dot
+  function isEmployeeRow(nameCell) {
+    if (!nameCell || typeof nameCell !== 'string') return false;
+    if (nameCell.includes('ตำแหน่งว่าง')) return false;
+    return nameCell.includes('นาย') || nameCell.includes('น.ส.') || nameCell.includes('นาง') ||
+           nameCell.includes('ศิริ') ||
+           /^[๑-๙๐\d]+\./.test(nameCell.trim());
+  }
+
+  // ===== SHIFT CODE DECODER =====
+  // Mn/Me/Mc/Mr/Mk = เวร M ที่ต่างๆ, Nn/Ne/Nc/Nk = เวร N ที่ต่างๆ, O... = หยุด
+  const UNIT_MAP = { n: 'วช.', e: 'วฟ.', c: 'วส.', r: 'ระนอง', k: 'กระบี่' };
+  const LEAVE_CODES = ['VL','VC','PL','SL'];
+
+  const HALF_SLOT_MAP = {
+    'MN1':['M','วช.',1],'MN2':['M','วช.',2],
+    'ME1':['M','วฟ.',1],'ME2':['M','วฟ.',2],
+    'MC1':['M','วส.',1],'MC2':['M','วส.',2],
+    'NN1':['N','วช.',1],'NN2':['N','วช.',2],
+    'NE1':['N','วฟ.',1],'NE2':['N','วฟ.',2],
+    'NC1':['N','วส.',1],'NC2':['N','วส.',2],
+    'M1': ['M','วช.',1],'M2': ['M','วช.',2],
+    'N1': ['N','วช.',1],'N2': ['N','วช.',2],
+  };
+  const HALF_TIMES = {1:'06:30-12:30', 2:'12:30-18:30'};
+
+  function decodeShift(raw, unitOverride) {
+    if (!raw) return null;
+    const s = String(raw).trim();
+    if (!s) return null;
+    const up = s.toUpperCase();
+
+    // Leave codes
+    for (const lc of LEAVE_CODES) {
+      if (up === lc || up.startsWith(lc)) return { type: 'leave', code: lc };
+    }
+
+    // O with location
+    if (up === 'ORN') return { type: 'off', raw: s, location: 'ระนอง' };
+    if (up === 'OKB') return { type: 'off', raw: s, location: 'กระบี่' };
+    if (up.startsWith('O')) return { type: 'off', raw: s };
+
+    // Half-shift codes: Me1, Me2, Mn1, Mn2, Ne1, Ne2, Nn1, Nn2 etc.
+    if (HALF_SLOT_MAP[up]) {
+      const [shift, baseUnit, half] = HALF_SLOT_MAP[up];
+      const unit = unitOverride || baseUnit;
+      return { type: 'half', shift, unit, half, time: HALF_TIMES[half], raw: s };
+    }
+
+    // M/N + unit letter
+    const mShift = s.match(/^([MN])([necrkNECRK])/i);
+    if (mShift) {
+      const shift = mShift[1].toUpperCase();
+      const unit = unitOverride || UNIT_MAP[mShift[2].toLowerCase()] || mShift[2];
+      return { type: 'work', shift, unit, raw: s };
+    }
+
+    // Plain M/N
+    if (up === 'M') return { type: 'work', shift: 'M', unit: unitOverride || 'วช.', raw: s };
+    if (up === 'N') return { type: 'work', shift: 'N', unit: unitOverride || 'วช.', raw: s };
+
+    return { type: 'other', raw: s };
+  }
+
+  function isEmployeeId(v) {
+    // row2 col1 is a numeric employee ID (5-6 digit number)
+    return typeof v === 'number' && v > 10000;
+  }
+
+  // ===== SINGLE-PASS PARSER =====
+  const employees = [];
+  let dayColMap = {};
+  let maxDay = 31;
+  let NAME_COL = 1; // col index where names appear (SheetJS: col A skipped → col B = index 1)
+  let ri = 0;
+
+  // Auto-detect NAME_COL from first few rows
+  for (const row of data.slice(0, 10)) {
+    for (let ci = 0; ci <= 3; ci++) {
+      const v = row[ci];
+      if (v && typeof v === 'string' &&
+          (v.includes('นาย') || v.includes('น.ส.') || v.includes('นาง') ||
+           /^[๑-๙๐\d]+\./.test(v.trim()))) {
+        NAME_COL = ci; break;
+      }
+    }
+    if (NAME_COL !== 1) break;
+  }
+
+  while (ri < data.length) {
+    const row = data[ri] || [];
+    if (isDayHeaderRow(row)) {
+      dayColMap = buildDayColMap(row);
+      maxDay = Math.max(...Object.keys(dayColMap).map(Number));
+      ri++; continue;
+    }
+
+    const nameCell = row[NAME_COL];
+    if (isEmployeeRow(nameCell) && Object.keys(dayColMap).length > 0) {
+      let name = nameCell.trim().replace(/^[๐-๙\d]+\.\s*/, '').replace(/\s+/g,' ').trim();
+      const r1row = data[ri]   || []; // เวรหลัก
+      const r2row = data[ri+1] || []; // อัปเดต (แต่ col1 = employee ID → ข้ามไป)
+      const r3row = data[ri+2] || []; // หมายเหตุ (col1 = รหัสย่อ → ข้ามไป)
+
+      // Build color override for this employee's r3 row
+      const colorOvr = buildColorOverride(ri + 2, dayColMap); // ri+2 = r3 row (0-based → addr uses ri+3)
+
+      const schedule = {};
+      for (const [day, ci] of Object.entries(dayColMap)) {
+        const d = parseInt(day);
+        const v1 = r1row[ci] != null ? String(r1row[ci]).trim() : '';
+        const v2 = r2row[ci] != null ? String(r2row[ci]).trim() : '';
+        const v3 = r3row[ci] != null ? String(r3row[ci]).trim() : '';
+        const v3up = v3.toUpperCase();
+
+        // แถว3: ข้อความ MRN/ORN ตรงๆ ก่อน
+        let main = v1 || 'O';
+        let unitOverride = null;
+        if (v3up === 'MRN') { main = 'Mr'; }
+        else if (v3up === 'ORN') { main = 'ORN'; }
+        else {
+          // ถ้าไม่มีข้อความ → ดูสีเซลล์
+          const colUnit = colorOvr[ci];
+          if (colUnit) {
+            if (colUnit === 'ORN') { main = 'O'; }           // หยุด — ยกเลิกเวรหลัก
+            else if (colUnit === 'MRN') { main = 'Mr'; }     // เวรหมุนเวียนระนอง
+            else { unitOverride = colUnit; }                  // วฟ./กระบี่ → unit override เท่านั้น
+          }
+        }
+
+        const mainDecoded = decodeShift(main, unitOverride);
+        if (unitOverride && mainDecoded && mainDecoded.type === 'off') mainDecoded.unit = unitOverride;
+
+        // แถว2: อัปเดต — เช็ค leave, half-shift หรือ แทนเวร
+        let update = null;
+        if (v2) {
+          const up2 = v2.toUpperCase();
+          // leave codes
+          const lc = LEAVE_CODES.find(l => up2 === l || up2.startsWith(l));
+          if (lc) {
+            update = { type: 'leave', code: lc };
+          } else if (!isEmployeeId(r2row[ci])) {
+            const dec = decodeShift(v2, unitOverride);
+            if (dec && dec.type === 'half') {
+              update = { type: 'half', shift: dec.shift, unit: dec.unit, half: dec.half, time: dec.time, raw: v2 };
+            } else if (dec && dec.type === 'work') {
+              update = { type: 'sub', shift: dec.shift, unit: dec.unit, raw: v2 };
+            }
+          }
+        }
+
+        // หมายเหตุ (v3) ที่ไม่ใช่ MRN/ORN
+        let note = null;
+        if (v3 && v3up !== 'MRN' && v3up !== 'ORN') note = v3;
+
+        schedule[d] = { main, mainDecoded, update, note, unitOverride, raw: {r1: v1, r2: v2, r3: v3} };
+      }
+      employees.push({ name, schedule });
+      ri += 3;
+    } else {
+      ri++;
+    }
+  }
+
+  if (employees.length === 0) {
+    // Debug: show what was found
+    const dayKeys = Object.keys(dayColMap);
+    // Debug: show first few rows at auto-detected name column
+    const sampleRows = data.slice(0, 10).map((r, i) => `row${i+1}[${NAME_COL}]=${(r||[])[NAME_COL]}`).join(' | ');
+    document.getElementById('uploadStatus').textContent =
+      `ไม่พบข้อมูลพนักงานในไฟล์ กรุณาตรวจสอบชีต "ลา2" | NAME_COL=${NAME_COL} | วันที่พบ: ${dayKeys.length} | ${sampleRows}`;
+    return;
+  }
+
+  scheduleData = {month, year, month_name: monthName, employees, max_day: maxDay, _source: 'upload'};
+
+  // Update UI
+  // Timestamp of latest upload
+  const now = new Date();
+  const thDays = ['อาทิตย์','จันทร์','อังคาร','พุธ','พฤหัสบดี','ศุกร์','เสาร์'];
+  const thMons = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  const dd = now.getDate(), mm = thMons[now.getMonth()], yy = now.getFullYear()+543;
+  const hh = String(now.getHours()).padStart(2,'0'), mn = String(now.getMinutes()).padStart(2,'0');
+  const dayName = thDays[now.getDay()];
+  const updatedStr = `วัน${dayName}ที่ ${dd} ${mm} ${yy} เวลา ${hh}:${mn} น.`;
+  document.getElementById('lastUpdated').textContent = `🕐 อัปเดตล่าสุด: ${updatedStr}`;
+  document.getElementById('lastUpdated').style.display = 'block';
+
+  document.getElementById('uploadSection').classList.add('loaded');
+  document.getElementById('uploadStatus').className = 'upload-status ok';
+  document.getElementById('uploadStatus').textContent = `✅ โหลดสำเร็จ: ${employees.length} คน — ${monthName}`;
+  document.getElementById('headerMonth').textContent = monthName;
+  document.getElementById('mainTabs').style.display = 'flex';
+
+  // Populate person select
+  const sel = document.getElementById('personSelect');
+  sel.innerHTML = '<option value="">-- กรุณาเลือก --</option>';
+  employees.forEach((emp, i) => {
+    sel.innerHTML += `<option value="${i}">${emp.name}</option>`;
+  });
+  // Reset person view when new file is loaded
+  document.getElementById('searchContent').innerHTML = '<p style="color:var(--text-muted);text-align:center;padding:24px">← เลือกชื่อพนักงานด้านบน</p>';
+
+  renderTodayPanel();
+  computeMissingDays();
+  showPersonSchedule();
+  // Reset file input so same file can be re-uploaded if needed
+  document.getElementById('fileInput').value = '';
+}
+
+function openCheckModal() {
+  if (!scheduleData) {
+    alert('กรุณาโหลดข้อมูลตารางก่อน');
+    return;
+  }
+  const maxDay = scheduleData.max_day || 31;
+  const missing = [];
+
+  for (let day = 1; day <= maxDay; day++) {
+    const ds = String(day);
+    const slots = {Mn: 0, Me: 0, Nn: 0, Ne: 0};
+    const halfSlots = {Mn:{1:0,2:0},Me:{1:0,2:0},Nn:{1:0,2:0},Ne:{1:0,2:0}};
+
+    for (const emp of scheduleData.employees) {
+      const s = emp.schedule[ds];
+      if (!s) continue;
+      const dec = s.mainDecoded;
+      const upd = s.update;
+
+      if (upd && upd.type === 'leave') continue;
+
+      if (upd && upd.type === 'sub') {
+        const raw = (upd.raw || '').toUpperCase();
+        if (raw === 'MN' || raw === 'M') slots['Mn']++;
+        else if (raw === 'ME') slots['Me']++;
+        else if (raw === 'NN' || raw === 'N') slots['Nn']++;
+        else if (raw === 'NE') slots['Ne']++;
+        continue;
+      }
+
+      if (upd && upd.type === 'half') {
+        const sh = upd.shift, u = upd.unit || '';
+        const key = sh + (u === 'วช.' ? 'n' : u === 'วฟ.' ? 'e' : '');
+        if (key in halfSlots) halfSlots[key][upd.half] = (halfSlots[key][upd.half] || 0) + 1;
+      }
+
+      if (!dec || dec.type !== 'work') continue;
+      const sh = dec.shift, u = dec.unit || '';
+      const key = sh + (u === 'วช.' ? 'n' : u === 'วฟ.' ? 'e' : '');
+      if (key in slots) slots[key]++;
+    }
+
+    for (const key of Object.keys(halfSlots)) {
+      if (halfSlots[key][1] > 0 && halfSlots[key][2] > 0) slots[key]++;
+    }
+
+    const miss = Object.entries(slots).filter(([,v]) => v === 0).map(([k]) => k);
+    if (miss.length > 0) missing.push({day, slots, miss});
+  }
+
+  const el = document.getElementById('checkModalContent');
+  const dataSource = scheduleData._source === 'embedded'
+    ? `<div style="background:#fef9c3;border:1px solid #fde047;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:0.85rem;">⚠️ กำลังตรวจสอบข้อมูล <strong>ที่ฝังในระบบ</strong> — อัปโหลดไฟล์ใหม่เพื่อตรวจสอบตารางล่าสุด</div>`
+    : `<div style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:0.85rem;">✅ ตรวจสอบข้อมูลจาก <strong>ไฟล์ที่อัปโหลด</strong> — ${scheduleData.month_name}</div>`;
+
+  if (missing.length === 0) {
+    el.innerHTML = dataSource + `<div style="color:#16a34a;font-weight:700;font-size:1rem;text-align:center;padding:20px;">✅ ครบทุกเวรทุกวัน ไม่มีวันที่ขาด!</div>`;
+  } else {
+    const rows = missing.map(({day, slots, miss}) => {
+      const missHtml = miss.map(k => `<span style="background:#fef2f2;border:1px solid #fecaca;color:#dc2626;font-weight:700;border-radius:5px;padding:1px 7px;margin-right:4px;">${k}</span>`).join('');
+      const fullHtml = Object.entries(slots).filter(([,v])=>v>0).map(([k,v])=>`<span style="color:#64748b;font-size:0.82rem;">${k}:${v}</span>`).join(' ');
+      return `<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid #f1f5f9;">
+        <span style="min-width:60px;font-weight:700;color:#0f172a;">วันที่ ${day}</span>
+        <span>ขาด: ${missHtml}</span>
+        <span style="margin-left:auto;">${fullHtml}</span>
+      </div>`;
+    }).join('');
+    el.innerHTML = dataSource +
+      `<div style="font-weight:700;margin-bottom:10px;color:#dc2626;">พบ ${missing.length} วัน ที่เวรไม่ครบ</div>` +
+      `<div style="font-size:0.82rem;color:#64748b;margin-bottom:10px;">เวรที่ตรวจ: Mn (เช้า วช.), Me (เช้า วฟ.), Nn (ดึก วช.), Ne (ดึก วฟ.)</div>` +
+      rows;
+  }
+  document.getElementById('checkModal').style.display = 'block';
+}
+
+// ============================================================
+// Auto-fetch schedule.xlsx from GitHub on page load
+// ============================================================
+const SCHEDULE_XLSX_URL = 'https://raw.githubusercontent.com/chaiyodpr-dev/nav-pupm-roaster/main/schedule.xlsx';
+
+function autoLoadFromGitHub() {
+  const status = document.getElementById('uploadStatus');
+  status.textContent = '⏳ กำลังโหลดตารางเวรจาก GitHub...';
+  status.className = 'upload-status';
+  loadSheetJS(function() {
+    fetch(SCHEDULE_XLSX_URL)
+      .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.arrayBuffer(); })
+      .then(buf => {
+        parseExcel(buf, 'schedule.xlsx');
+        status.textContent = '✅ โหลดจาก GitHub สำเร็จ — กดปุ่มรีโหลดเพื่ออัปเดต';
+        status.className = 'upload-status ok';
+      })
+      .catch(err => {
+        status.textContent = '❌ โหลดจาก GitHub ไม่ได้: ' + err.message + ' — กรุณาอัปโหลดไฟล์เอง';
+        status.className = 'upload-status error';
+      });
+  });
+}
+
+// Auto-load on page open
+autoLoadFromGitHub();
+
+renderTodayPanel();
+computeMissingDays();
+</script>
+</body>
+</html>
