@@ -1098,9 +1098,12 @@ function parseExcel(arrayBuffer, filename) {
   employees.forEach((emp, i) => {
     sel.innerHTML += `<option value="${i}">${emp.name}</option>`;
   });
+  // Reset person view when new file is loaded
+  document.getElementById('searchContent').innerHTML = '<p style="color:var(--text-muted);text-align:center;padding:24px">← เลือกชื่อพนักงานด้านบน</p>';
 
   renderTodayPanel();
   computeMissingDays();
+  showPersonSchedule();
   // Reset file input so same file can be re-uploaded if needed
   document.getElementById('fileInput').value = '';
 }
