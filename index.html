@@ -1121,8 +1121,8 @@ function parseExcel(arrayBuffer, filename) {
       const r2row = data[ri+1] || []; // อัปเดต (แต่ col1 = employee ID → ข้ามไป)
       const r3row = data[ri+2] || []; // หมายเหตุ (col1 = รหัสย่อ → ข้ามไป)
 
-      // Build color override for this employee's r3 row
-      const colorOvr = buildColorOverride(ri + 2, dayColMap); // ri+2 = r3 row (0-based → addr uses ri+3)
+      // Build color override for this employee's r1 row (main shift row has fill colors)
+      const colorOvr = buildColorOverride(ri, dayColMap); // ri = r1 row (0-based → addr uses ri+1)
 
       const schedule = {};
       for (const [day, ci] of Object.entries(dayColMap)) {
