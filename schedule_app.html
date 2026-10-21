@@ -323,7 +323,7 @@
 <body>
 
 <header>
-  <h1>📅 ตารางเวร ศภ.บภ ๑. (วช.บว.) <span style="font-size:0.65rem;opacity:0.6;font-weight:400">v51</span></h1>
+  <h1>📅 ตารางเวร ศภ.บภ ๑. (วช.บว.) <span style="font-size:0.65rem;opacity:0.6;font-weight:400">v52</span></h1>
   <p id="headerMonth">กรุณาอัปโหลดไฟล์ตารางเวร Excel</p>
 </header>
 
@@ -832,23 +832,137 @@ function parseExcel(arrayBuffer, filename) {
   const data = XLSX.utils.sheet_to_json(ws, {header: 1, defval: null, raw: true});
 
   // ===== COLOR HELPERS =====
-  // Read fgColor from a SheetJS cell object (ws[addr])
-  // Returns: 'ORN' | 'MRN' | 'กระบี่' | 'วฟ.' | null
+  // Build fill lookup from raw xlsx styles XML: xfIdx → {theme, tint, rgb}
+  // SheetJS cellStyles:true จะส่ง cell.s เป็น object ที่มี fgColor แต่บางไฟล์ส่งมาไม่ครบ
+  // สร้าง fallback โดย parse styles.xml เองจาก wb.Sheets ที่ SheetJS เก็บไว้
   const COLOR_MAP = {
     'FFFFE7FF': 'ORN',   // light purple → พักหมุนเวียนระนอง
     'FFCAFFFE': 'MRN',   // light blue → ปฏิบัติงานระนอง
     'FFFFFF99': 'วฟ.',   // light yellow → วฟ.
   };
+  const IGNORE_RGB = 'FFFFF3CD';
+
+  // Parse styles XML to build xfIdx → fillColor map
+  const _xfFillMap = {};  // xfIdx → {theme, tint, rgb} or null
+  try {
+    const stylesXml = wb.Strings ? null : null; // placeholder
+    // SheetJS exposes raw files via wb.Workbook but styles via wb.SSF
+    // Best approach: use wb.Sheets raw XML data stored by SheetJS
+    // Actually SheetJS stores styles in wb.Workbook.Sheets / wb.Styles
+    // Fallback: parse arrayBuffer directly via JSZip-like approach
+    // We'll use the DOMParser on the raw XML bytes SheetJS keeps internally
+    if (wb.Styles && wb.Styles.Fills) {
+      // SheetJS Pro exposes this — try it
+      const fills = wb.Styles.Fills;
+      const xfs = wb.Styles.CellXf || [];
+      xfs.forEach((xf, idx) => {
+        const fi = xf.fillId || 0;
+        const fill = fills[fi];
+        if (fill && fill.fgColor) {
+          _xfFillMap[idx] = fill.fgColor;
+        }
+      });
+    }
+  } catch(e) {}
+
+  // Parse raw xlsx ZIP to get fill colors (most reliable)
+  // We already have arrayBuffer — reuse it
+  const _cellFillByAddr = {};  // 'C18' → {theme, tint, rgb}
+  try {
+    // Use JSZip if available, otherwise use XLSX.CFB
+    const zdata = new Uint8Array(arrayBuffer);
+    // XLSX has built-in zip reader
+    const cfb = XLSX.CFB ? XLSX.CFB.read(zdata, {type:'array'}) : null;
+    // Better: use XLSX.zip_to_files which is internal
+    // Actually simplest: parse using XLSX.read internals
+    // Use manual zip parse via XLSX.utils
+    // XLSX exposes zip via the workbook's vbaraw or via internal _zip
+    // Try _zip first (some builds expose it)
+    const _zip = wb._zip || (XLSX.utils._zip_read && XLSX.utils._zip_read(zdata));
+    if (_zip) {
+      const parseXml = (str) => new DOMParser().parseFromString(str, 'application/xml');
+      const getNs = (root) => root.documentElement.namespaceURI || 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
+
+      const stylesEntry = _zip.file('xl/styles.xml') || _zip.file('xl\\styles.xml');
+      const sheetEntry = _zip.file('xl/worksheets/sheet1.xml') || _zip.file('xl\\worksheets\\sheet1.xml');
+
+      if (stylesEntry && sheetEntry) {
+        const stylesStr = stylesEntry.asText ? stylesEntry.asText() : new TextDecoder().decode(stylesEntry);
+        const sheetStr = sheetEntry.asText ? sheetEntry.asText() : new TextDecoder().decode(sheetEntry);
+        const stylesDoc = parseXml(stylesStr);
+        const sheetDoc = parseXml(sheetStr);
+        const ns = getNs(stylesDoc);
+
+        // Parse fills list
+        const fillsList = [];
+        const fillsEl = stylesDoc.getElementsByTagNameNS(ns, 'fills')[0];
+        if (fillsEl) {
+          for (const fillEl of fillsEl.getElementsByTagNameNS(ns, 'fill')) {
+            const pf = fillEl.getElementsByTagNameNS(ns, 'patternFill')[0];
+            if (!pf || pf.getAttribute('patternType') === 'none' || pf.getAttribute('patternType') === 'gray125') {
+              fillsList.push(null); continue;
+            }
+            const fg = pf.getElementsByTagNameNS(ns, 'fgColor')[0];
+            if (!fg) { fillsList.push(null); continue; }
+            const themeAttr = fg.getAttribute('theme');
+            fillsList.push({
+              type: themeAttr !== null ? 'theme' : 'rgb',
+              theme: themeAttr !== null ? parseInt(themeAttr) : null,
+              tint: parseFloat(fg.getAttribute('tint') || '0'),
+              rgb: fg.getAttribute('rgb'),
+            });
+          }
+        }
+        // Parse xf → fillId
+        const xfFills = [];
+        const cellXfsEl = stylesDoc.getElementsByTagNameNS(ns, 'cellXfs')[0];
+        if (cellXfsEl) {
+          for (const xf of cellXfsEl.getElementsByTagNameNS(ns, 'xf')) {
+            xfFills.push(parseInt(xf.getAttribute('fillId') || '0'));
+          }
+        }
+        // Parse sheet cells
+        const sheetNs = sheetDoc.documentElement.namespaceURI;
+        for (const rowEl of sheetDoc.getElementsByTagNameNS(sheetNs, 'row')) {
+          for (const cellEl of rowEl.getElementsByTagNameNS(sheetNs, 'c')) {
+            const ref = cellEl.getAttribute('r');
+            const sAttr = cellEl.getAttribute('s');
+            if (!ref || sAttr === null) continue;
+            const xfIdx = parseInt(sAttr);
+            if (xfIdx < xfFills.length) {
+              const fi = xfFills[xfIdx];
+              if (fi < fillsList.length && fillsList[fi]) {
+                _cellFillByAddr[ref] = fillsList[fi];
+              }
+            }
+          }
+        }
+      }
+    }
+  } catch(e) { console.warn('Color XML parse error:', e); }
+
+  function fgColorToUnit(fill) {
+    if (!fill) return null;
+    if (fill.type === 'theme' || fill.theme !== undefined) {
+      const t = fill.theme;
+      const tint = fill.tint || 0;
+      if (t === 9) return 'กระบี่';
+      if (t === 1 && Math.abs(tint - 0.5) < 0.1) return 'ORN';  // Black Text1 Lighter50%
+      return null;
+    }
+    const rgb = (fill.rgb || fill.argb || '').toUpperCase();
+    if (!rgb || rgb === '00000000' || rgb === 'FFFFFFFF' || rgb === IGNORE_RGB) return null;
+    return COLOR_MAP[rgb] || null;
+  }
+
   function getCellColorUnit(addr) {
+    // 1) Try raw XML fill map (most reliable, handles theme:1 tint:0.5)
+    if (_cellFillByAddr[addr]) return fgColorToUnit(_cellFillByAddr[addr]);
+    // 2) Fallback: SheetJS cell.s
     const cell = ws[addr];
     if (!cell || !cell.s) return null;
     const fill = cell.s.fgColor || (cell.s.fill && cell.s.fill.fgColor);
-    if (!fill) return null;
-    // Theme color index 9 → กระบี่
-    if (fill.theme === 9) return 'กระบี่';
-    const rgb = fill.rgb ? fill.rgb.toUpperCase() : (fill.argb ? fill.argb.toUpperCase() : null);
-    if (rgb && COLOR_MAP[rgb]) return COLOR_MAP[rgb];
-    return null;
+    return fgColorToUnit(fill);
   }
 
   // Decode Excel column index to A1-style address
