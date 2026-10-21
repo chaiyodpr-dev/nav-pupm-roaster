@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Version 57 -->
+<!-- Version 58 -->
 <html lang="th">
 <head>
 <meta charset="UTF-8">
@@ -323,7 +323,7 @@
 <body>
 
 <header>
-  <h1>📅 ตารางเวร ศภ.บภ ๑. (วช.บว.) <span style="font-size:0.65rem;opacity:0.6;font-weight:400">v57</span></h1>
+  <h1>📅 ตารางเวร ศภ.บภ ๑. (วช.บว.) <span style="font-size:0.65rem;opacity:0.6;font-weight:400">v58</span></h1>
   <p id="headerMonth">กรุณาอัปโหลดไฟล์ตารางเวร Excel</p>
 </header>
 
@@ -788,10 +788,17 @@ function showPersonSchedule() {
 // Excel parsing with SheetJS (XLSX)
 // ============================================================
 function loadSheetJS(callback) {
-  if (window.XLSX) { callback(); return; }
+  const loadJSZip = (cb) => {
+    if (window.JSZip) { cb(); return; }
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
+    s.onload = cb;
+    document.head.appendChild(s);
+  };
+  if (window.XLSX) { loadJSZip(callback); return; }
   const s = document.createElement('script');
   s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
-  s.onload = callback;
+  s.onload = () => loadJSZip(callback);
   document.head.appendChild(s);
 }
 
@@ -867,29 +874,22 @@ function parseExcel(arrayBuffer, filename) {
   } catch(e) {}
 
   // Parse raw xlsx ZIP to get fill colors (most reliable)
-  // We already have arrayBuffer — reuse it
+  // Use JSZip to unzip arrayBuffer directly — most reliable cross-browser approach
   const _cellFillByAddr = {};  // 'C18' → {theme, tint, rgb}
   try {
-    // Use JSZip if available, otherwise use XLSX.CFB
-    const zdata = new Uint8Array(arrayBuffer);
-    // XLSX has built-in zip reader
-    const cfb = XLSX.CFB ? XLSX.CFB.read(zdata, {type:'array'}) : null;
-    // Better: use XLSX.zip_to_files which is internal
-    // Actually simplest: parse using XLSX.read internals
-    // Use manual zip parse via XLSX.utils
-    // XLSX exposes zip via the workbook's vbaraw or via internal _zip
-    // Try _zip first (some builds expose it)
-    const _zip = wb._zip || (XLSX.utils._zip_read && XLSX.utils._zip_read(zdata));
-    if (_zip) {
+    const JSZip = window.JSZip;
+    if (!JSZip) throw new Error('JSZip not loaded');
+    const zip = await JSZip.loadAsync(arrayBuffer);
+    {
       const parseXml = (str) => new DOMParser().parseFromString(str, 'application/xml');
       const getNs = (root) => root.documentElement.namespaceURI || 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
 
-      const stylesEntry = _zip.file('xl/styles.xml') || _zip.file('xl\\styles.xml');
-      const sheetEntry = _zip.file('xl/worksheets/sheet1.xml') || _zip.file('xl\\worksheets\\sheet1.xml');
+      const stylesEntry = zip.file('xl/styles.xml');
+      const sheetEntry = zip.file('xl/worksheets/sheet1.xml');
 
       if (stylesEntry && sheetEntry) {
-        const stylesStr = stylesEntry.asText ? stylesEntry.asText() : new TextDecoder().decode(stylesEntry);
-        const sheetStr = sheetEntry.asText ? sheetEntry.asText() : new TextDecoder().decode(sheetEntry);
+        const stylesStr = await stylesEntry.async('string');
+        const sheetStr = await sheetEntry.async('string');
         const stylesDoc = parseXml(stylesStr);
         const sheetDoc = parseXml(sheetStr);
         const ns = getNs(stylesDoc);
