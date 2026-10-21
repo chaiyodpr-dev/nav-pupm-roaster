@@ -550,7 +550,7 @@ function renderTodayPanel() {
   const mWorkers = [], nWorkers = [];
 
   for (const emp of scheduleData.employees) {
-    const s = emp.schedule[dayNum];
+    const s = emp.schedule[String(dayNum)];
     if (!s) continue;
     const dec = s.mainDecoded;
     const rawStr = s.raw ? `r1:${s.raw.r1||'-'} r2:${s.raw.r2||'-'} r3:${s.raw.r3||'-'}` : '';
@@ -687,7 +687,7 @@ function showPersonSchedule() {
     const isSun = dayOfWeek === 0;
     const isSat = dayOfWeek === 6;
     const isToday = d === todayDay;
-    const s = emp.schedule[d];
+    const s = emp.schedule[String(d)];
 
     let cellClass = 'cal-cell';
     if (isSun) cellClass += ' sun';
@@ -731,7 +731,7 @@ function showPersonSchedule() {
   html += `<div class="shift-section"><h3>สรุปเดือน</h3>`;
   let mCount = 0, nCount = 0, oCount = 0, leaveCount = 0, subCount = 0;
   for (let d = 1; d <= maxDay; d++) {
-    const s = emp.schedule[d];
+    const s = emp.schedule[String(d)];
     if (!s) continue;
     const dec = s.mainDecoded;
     if (dec && dec.type === 'work') {
