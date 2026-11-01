@@ -1279,6 +1279,7 @@ function openCheckModal() {
   }
   const maxDay = scheduleData.max_day || 31;
   const missing = [];
+  const dupDays = [];   // เวรซ้ำ (มีคนเกิน 1 คนในเวรเดียวกัน)
 
   for (let day = 1; day <= maxDay; day++) {
     const ds = String(day);
@@ -1320,6 +1321,8 @@ function openCheckModal() {
 
     const miss = Object.entries(slots).filter(([,v]) => v === 0).map(([k]) => k);
     if (miss.length > 0) missing.push({day, slots, miss});
+    const dup = Object.entries(slots).filter(([,v]) => v > 1).map(([k]) => k);
+    if (dup.length > 0) dupDays.push({day, slots, dup});
   }
 
   const el = document.getElementById('checkModalContent');
@@ -1327,22 +1330,27 @@ function openCheckModal() {
     ? `<div style="background:#fef9c3;border:1px solid #fde047;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:0.85rem;">⚠️ กำลังตรวจสอบข้อมูล <strong>ที่ฝังในระบบ</strong> — อัปโหลดไฟล์ใหม่เพื่อตรวจสอบตารางล่าสุด</div>`
     : `<div style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:0.85rem;">✅ ตรวจสอบข้อมูลจาก <strong>ไฟล์ที่อัปโหลด</strong> — ${scheduleData.month_name}</div>`;
 
-  if (missing.length === 0) {
-    el.innerHTML = dataSource + `<div style="color:#16a34a;font-weight:700;font-size:1rem;text-align:center;padding:20px;">✅ ครบทุกเวรทุกวัน ไม่มีวันที่ขาด!</div>`;
-  } else {
-    const rows = missing.map(({day, slots, miss}) => {
-      const missHtml = miss.map(k => `<span style="background:#fef2f2;border:1px solid #fecaca;color:#dc2626;font-weight:700;border-radius:5px;padding:1px 7px;margin-right:4px;">${k}</span>`).join('');
-      const fullHtml = Object.entries(slots).filter(([,v])=>v>0).map(([k,v])=>`<span style="color:#64748b;font-size:0.82rem;">${k}:${v}</span>`).join(' ');
-      return `<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid #f1f5f9;">
+  const chip = (k, bg, bd, fg) => `<span style="background:${bg};border:1px solid ${bd};color:${fg};font-weight:700;border-radius:5px;padding:1px 7px;margin-right:4px;">${k}</span>`;
+  const slotText = (slots) => Object.entries(slots).filter(([,v])=>v>0).map(([k,v])=>`<span style="color:#64748b;font-size:0.82rem;">${k}:${v}</span>`).join(' ');
+  const rowHtml = (day, label, chips, slots) => `<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid #f1f5f9;">
         <span style="min-width:60px;font-weight:700;color:#0f172a;">วันที่ ${day}</span>
-        <span>ขาด: ${missHtml}</span>
-        <span style="margin-left:auto;">${fullHtml}</span>
+        <span>${label}: ${chips}</span>
+        <span style="margin-left:auto;">${slotText(slots)}</span>
       </div>`;
-    }).join('');
-    el.innerHTML = dataSource +
-      `<div style="font-weight:700;margin-bottom:10px;color:#dc2626;">พบ ${missing.length} วัน ที่เวรไม่ครบ</div>` +
-      `<div style="font-size:0.82rem;color:#64748b;margin-bottom:10px;">เวรที่ตรวจ: Mn (เช้า วช.), Me (เช้า วฟ.), Nn (ดึก วช.), Ne (ดึก วฟ.)</div>` +
-      rows;
+
+  if (missing.length === 0 && dupDays.length === 0) {
+    el.innerHTML = dataSource + `<div style="color:#16a34a;font-weight:700;font-size:1rem;text-align:center;padding:20px;">✅ ครบทุกเวรทุกวัน ไม่มีวันที่ขาดหรือซ้ำ!</div>`;
+  } else {
+    let out = dataSource + `<div style="font-size:0.82rem;color:#64748b;margin-bottom:10px;">เวรที่ตรวจ: Mn (เช้า วช.), Me (เช้า วฟ.), Nn (ดึก วช.), Ne (ดึก วฟ.)</div>`;
+    if (missing.length > 0) {
+      out += `<div style="font-weight:700;margin:6px 0 4px;color:#dc2626;">พบ ${missing.length} วัน ที่เวรไม่ครบ (ขาด)</div>` +
+        missing.map(({day, slots, miss}) => rowHtml(day, 'ขาด', miss.map(k => chip(k,'#fef2f2','#fecaca','#dc2626')).join(''), slots)).join('');
+    }
+    if (dupDays.length > 0) {
+      out += `<div style="font-weight:700;margin:14px 0 4px;color:#b45309;">พบ ${dupDays.length} วัน ที่มีเวรซ้ำ (มีคนเกิน 1 คน)</div>` +
+        dupDays.map(({day, slots, dup}) => rowHtml(day, 'ซ้ำ', dup.map(k => chip(k + '×' + slots[k],'#fffbeb','#fde68a','#b45309')).join(''), slots)).join('');
+    }
+    el.innerHTML = out;
   }
   document.getElementById('checkModal').style.display = 'block';
 }
