@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Version 60 -->
+<!-- Version 61 -->
 <html lang="th">
 <head>
 <meta charset="UTF-8">
@@ -323,7 +323,7 @@
 <body>
 
 <header>
-  <h1>📅 ตารางเวร ศภ.บภ ๑. (วช.บว.) <span style="font-size:0.65rem;opacity:0.6;font-weight:400">v60</span></h1>
+  <h1>📅 ตารางเวร ศภ.บภ ๑. (วช.บว.) <span style="font-size:0.65rem;opacity:0.6;font-weight:400">v61</span></h1>
   <p id="headerMonth">กรุณาอัปโหลดไฟล์ตารางเวร Excel</p>
 </header>
 
@@ -1064,7 +1064,7 @@ async function parseExcel(arrayBuffer, filename) {
     // Half-shift codes: Me1, Me2, Mn1, Mn2, Ne1, Ne2, Nn1, Nn2 etc.
     if (HALF_SLOT_MAP[up]) {
       const [shift, baseUnit, half] = HALF_SLOT_MAP[up];
-      const unit = unitOverride || baseUnit;
+      const unit = baseUnit; // ตัวอักษรสถานที่ในรหัส (n/e/c) สำคัญกว่าสีแถว 3
       return { type: 'half', shift, unit, half, time: HALF_TIMES[half], raw: s };
     }
 
@@ -1072,7 +1072,7 @@ async function parseExcel(arrayBuffer, filename) {
     const mShift = s.match(/^([MN])([necrkNECRK])/i);
     if (mShift) {
       const shift = mShift[1].toUpperCase();
-      const unit = unitOverride || UNIT_MAP[mShift[2].toLowerCase()] || mShift[2];
+      const unit = UNIT_MAP[mShift[2].toLowerCase()] || unitOverride || mShift[2]; // ตัวอักษรสำคัญกว่าสีแถว 3
       return { type: 'work', shift, unit, raw: s };
     }
 
