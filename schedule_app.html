@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Version 62 -->
+<!-- Version 63 -->
 <html lang="th">
 <head>
 <meta charset="UTF-8">
@@ -323,7 +323,7 @@
 <body>
 
 <header>
-  <h1>📅 ตารางเวร ศภ.บภ ๑. (วช.บว.) <span style="font-size:0.65rem;opacity:0.6;font-weight:400">v62</span></h1>
+  <h1>📅 ตารางเวร ศภ.บภ ๑. (วช.บว.) <span style="font-size:0.65rem;opacity:0.6;font-weight:400">v63</span></h1>
   <p id="headerMonth">กรุณาอัปโหลดไฟล์ตารางเวร Excel</p>
 </header>
 
@@ -1313,7 +1313,7 @@ function autoLoadFromGitHub() {
   status.textContent = '⏳ กำลังโหลดตารางเวรจาก GitHub...';
   status.className = 'upload-status';
   loadSheetJS(function() {
-    fetch(SCHEDULE_XLSX_URL)
+    fetch(SCHEDULE_XLSX_URL + '?t=' + Date.now(), {cache: 'no-store'})  // กันแคช: ได้ไฟล์ล่าสุดเสมอ
       .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.arrayBuffer(); })
       .then(async buf => {
         await parseExcel(buf, 'schedule.xlsx');
