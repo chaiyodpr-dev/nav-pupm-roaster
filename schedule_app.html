@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Version 61 -->
+<!-- Version 62 -->
 <html lang="th">
 <head>
 <meta charset="UTF-8">
@@ -323,7 +323,7 @@
 <body>
 
 <header>
-  <h1>📅 ตารางเวร ศภ.บภ ๑. (วช.บว.) <span style="font-size:0.65rem;opacity:0.6;font-weight:400">v61</span></h1>
+  <h1>📅 ตารางเวร ศภ.บภ ๑. (วช.บว.) <span style="font-size:0.65rem;opacity:0.6;font-weight:400">v62</span></h1>
   <p id="headerMonth">กรุณาอัปโหลดไฟล์ตารางเวร Excel</p>
 </header>
 
@@ -1043,7 +1043,7 @@ async function parseExcel(arrayBuffer, filename) {
     'M1': ['M','วช.',1],'M2': ['M','วช.',2],
     'N1': ['N','วช.',1],'N2': ['N','วช.',2],
   };
-  const HALF_TIMES = {1:'06:30-12:30', 2:'12:30-18:30'};
+  const HALF_TIMES = {M:{1:'06:30-12:30', 2:'12:30-18:30'}, N:{1:'18:30-00:30', 2:'00:30-06:30'}}; // ครึ่งแรก/ครึ่งหลัง (6 ชม.) ของกะ M และ N
 
   function decodeShift(raw, unitOverride) {
     if (!raw) return null;
@@ -1065,7 +1065,7 @@ async function parseExcel(arrayBuffer, filename) {
     if (HALF_SLOT_MAP[up]) {
       const [shift, baseUnit, half] = HALF_SLOT_MAP[up];
       const unit = baseUnit; // ตัวอักษรสถานที่ในรหัส (n/e/c) สำคัญกว่าสีแถว 3
-      return { type: 'half', shift, unit, half, time: HALF_TIMES[half], raw: s };
+      return { type: 'half', shift, unit, half, time: HALF_TIMES[shift][half], raw: s };
     }
 
     // M/N + unit letter
