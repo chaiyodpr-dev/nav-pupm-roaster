@@ -531,6 +531,15 @@ function toggleDebug(on) {
   showPersonSchedule();
 }
 
+// ข้อความอธิบายเหตุผลการแทนเวร: กองไหน + ตำแหน่งว่าง/ใครลา
+function subReasonText(u) {
+  if (!u) return '';
+  const base = `แทนเวร กอง ${u.unit}`;
+  if (u.subReason === 'leave') return `${base} — ${u.leaveOf} ลา ${u.leaveCode}`;
+  if (u.subReason === 'vacancy') return `${base} — ตำแหน่งว่าง`;
+  return `${base} — ไม่พบตำแหน่งว่าง/ผู้ลาที่ตรงกัน`;
+}
+
 // เวรครึ่งกะ (Me1/Me2/Ne1/Ne2...) → label เช่น "Me2" + คำอธิบายช่วงเวลา
 function halfLabel(h) {
   const base = getShiftCellLabel({type:'work', shift:h.shift, unit:h.unit}, h.shift);
@@ -601,14 +610,7 @@ function renderTodayPanel() {
       const subDec = s.update;
       const subTagCls = 'tag-' + getUnitTagClass(subDec);
       const subFullLbl = getShiftFullLabel(subDec, subDec.raw || subDec.shift);
-      let subNote = '';
-      if (s.update.subReason === 'leave') {
-        subNote = `แทน${s.update.leaveOf} ลา ${s.update.leaveCode || ''}`;
-      } else if (s.update.subReason === 'vacancy') {
-        subNote = `แทนตำแหน่งว่าง (${s.update.vacancyUnit})`;
-      } else {
-        subNote = 'แทนเวร';
-      }
+      const subNote = subReasonText(s.update);
       // กฎ: ถ้าแถว 3 ระบุ MRN/ORN → เวรหลัก r1 ไม่มีความหมายแล้ว ไม่แสดง "เดิม" ใดๆ
       // origFullLbl แสดงเฉพาะเมื่อ main เป็น work ธรรมดา (ไม่ใช่ Mr/ORN ที่มาจากแถว 3)
       const mainIsRNOverride = s.main === 'O' && s.unitOverride == null || s.main === 'Mr';
@@ -623,7 +625,7 @@ function renderTodayPanel() {
     if (s.update && s.update.type === 'half') {
       const h = s.update;
       const hw = {name: emp.name, tagCls: 'tag-' + getUnitTagClass(h), fullLbl: halfLabel(h) + ' (' + h.time + ')',
-                  subNote: `ครึ่งกะ${h.half === 1 ? 'ช่วงแรก' : 'ช่วงหลัง'} ${h.unit}`, origFullLbl: null, rawStr};
+                  subNote: `ครึ่งกะ${h.half === 1 ? 'ช่วงแรก' : 'ช่วงหลัง'} · ${subReasonText(h)}`, origFullLbl: null, rawStr};
       if (h.shift === 'M') mWorkers.push(hw);
       else if (h.shift === 'N') nWorkers.push(hw);
     }
@@ -748,10 +750,7 @@ function showPersonSchedule() {
         const subLbl = getShiftCellLabel(s.update, s.update.raw);
         const subFull = getShiftFullLabel(s.update, s.update.raw);
         const sc = s.update.shift === 'M' || s.update.shift === 'N' ? 'cal-shift-repl' : 'cal-shift-O';
-        let subNote = '';
-        if (s.update.subReason === 'leave') subNote = ` แทน${s.update.leaveOf}`;
-        else if (s.update.subReason === 'vacancy') subNote = ` แทนว่าง(${s.update.vacancyUnit})`;
-        else subNote = ' แทนเวร';
+        const subNote = ' — ' + subReasonText(s.update);
         html += `<span class="cal-shift ${sc}" title="${subFull}${subNote}">${subLbl}*</span>`;
         // เวรหลักจางๆ — แสดงเฉพาะ work ปกติ, ถ้า MRN/ORN (แถว 3) ไม่แสดง r1 เดิม
         const calMainIsRNOverride = s.main === 'ORN' || s.main === 'Mr';
@@ -770,7 +769,7 @@ function showPersonSchedule() {
         const cls = uc === 'MRN' ? 'cal-shift-MRN' : uc === 'MKB' ? 'cal-shift-MKB' : uc === 'NKB' ? 'cal-shift-NKB' : `cal-shift-${dec.shift}`;
         html += `<span class="cal-shift ${cls}" title="${fullLbl}${rawTip}">${cellLbl}${debugMode && s.raw ? `<br><span style="font-size:0.6rem;font-family:monospace;color:#64748b">${s.raw.r1||''}/${s.raw.r2||''}/${s.raw.r3||''}</span>` : ''}</span>`;
         if (s.update && s.update.type === 'half') {
-          html += `<span class="cal-shift cal-shift-repl" title="${halfTitle(s.update)}">${halfLabel(s.update)}*</span>`;
+          html += `<span class="cal-shift cal-shift-repl" title="${halfTitle(s.update)} — ${subReasonText(s.update)}">${halfLabel(s.update)}*</span>`;
         }
       } else {
         // Off/ORN/other
@@ -779,13 +778,29 @@ function showPersonSchedule() {
         html += `<span class="cal-shift cal-shift-O" title="${fullLbl2}">${cellLbl2}${debugMode && s.raw ? `<br><span style="font-size:0.6rem;font-family:monospace;color:#64748b">${s.raw.r1||''}/${s.raw.r2||''}/${s.raw.r3||''}</span>` : ''}</span>`;
         // หยุดแต่มีเวรครึ่งกะ (เช่น Os + Me2) → แสดงเวรครึ่งกะด้วย
         if (s.update && s.update.type === 'half') {
-          html += `<span class="cal-shift cal-shift-repl" title="${halfTitle(s.update)}">${halfLabel(s.update)}*</span>`;
+          html += `<span class="cal-shift cal-shift-repl" title="${halfTitle(s.update)} — ${subReasonText(s.update)}">${halfLabel(s.update)}*</span>`;
         }
       }
     }
     html += `</div></div>`;
   }
   html += `</div>`;
+
+  // รายละเอียดการแทนเวร (ใครแทนเวรอะไร กองไหน เพราะอะไร)
+  let subRows = '';
+  for (let d = 1; d <= maxDay; d++) {
+    const s2 = emp.schedule[String(d)];
+    if (!s2 || !s2.update) continue;
+    const u = s2.update;
+    if (u.type === 'sub') {
+      subRows += `<div style="padding:5px 0;border-bottom:1px solid #f1f5f9;"><b>วันที่ ${d}</b> · ${getShiftCellLabel(u, u.raw)} · ${subReasonText(u)}</div>`;
+    } else if (u.type === 'half') {
+      subRows += `<div style="padding:5px 0;border-bottom:1px solid #f1f5f9;"><b>วันที่ ${d}</b> · ${halfLabel(u)} (${u.time}) · ${subReasonText(u)}</div>`;
+    }
+  }
+  if (subRows) {
+    html += `<div class="shift-section"><h3>รายละเอียดการแทนเวร</h3><div style="font-size:0.9rem;line-height:1.6;">${subRows}</div></div>`;
+  }
 
   // Summary table
   html += `<div class="shift-section"><h3>สรุปเดือน</h3>`;
@@ -1138,6 +1153,8 @@ async function parseExcel(arrayBuffer, filename) {
   let maxDay = 31;
   let NAME_COL = 1; // col index where names appear (SheetJS: col A skipped → col B = index 1)
   let ri = 0;
+  let blockUnit = null;       // กองของตารางช่วงปัจจุบัน (วช./วส./วฟ.) จากหัวตาราง
+  const vacancies = [];       // แถว 'ตำแหน่งว่าง'
 
   // Auto-detect NAME_COL from first few rows
   for (const row of data.slice(0, 10)) {
@@ -1161,6 +1178,23 @@ async function parseExcel(arrayBuffer, filename) {
     }
 
     const nameCell = row[NAME_COL];
+    // หัวตาราง เช่น "...ศภ.บภ ๑.(วช.บว.) ประจำเดือน..." → กองของช่วงนี้
+    if (typeof nameCell === 'string' && nameCell.includes('ตารางการปฏิบัติงาน')) {
+      const bm = nameCell.match(/\((ว[ชสฟ])\./);
+      if (bm) blockUnit = bm[1] + '.';
+    }
+    // แถว "ตำแหน่งว่าง" → เก็บไว้ใช้อธิบายเหตุผลการแทนเวร (ไม่นับเป็นพนักงาน)
+    if (typeof nameCell === 'string' && nameCell.includes('ตำแหน่งว่าง') && Object.keys(dayColMap).length > 0) {
+      const vr1 = {}, vr2 = {};
+      for (const [day, ci] of Object.entries(dayColMap)) {
+        vr1[day] = row[ci] != null ? String(row[ci]).trim() : '';
+        const r2v = (data[ri+1] || [])[ci];
+        vr2[day] = r2v != null ? String(r2v).trim() : '';
+      }
+      vacancies.push({unit: blockUnit, name: nameCell.trim(), r1: vr1, r2: vr2});
+      ri += 3;
+      continue;
+    }
     if (isEmployeeRow(nameCell) && Object.keys(dayColMap).length > 0) {
       let name = nameCell.trim().replace(/^[๐-๙\d]+\.\s*/, '').replace(/\s+/g,' ').trim();
       const r1row = data[ri]   || []; // เวรหลัก
@@ -1220,12 +1254,74 @@ async function parseExcel(arrayBuffer, filename) {
 
         schedule[d] = { main, mainDecoded, update, note, unitOverride, raw: {r1: v1, r2: v2, r3: v3} };
       }
-      employees.push({ name, schedule });
+      const abbr = (r3row[NAME_COL] != null ? String(r3row[NAME_COL]).trim() : '');
+      employees.push({ name, abbr, schedule });
       ri += 3;
     } else {
       ri++;
     }
   }
+
+  // ===== จับคู่เหตุผลการแทนเวร: ผู้ลา / ตำแหน่งว่าง (กองเดียวกัน วันเดียวกัน กะเดียวกัน) =====
+  (function assignSubReasons() {
+    const shortName = n => n.replace(/^(นางสาว|นาย|นาง|น\.ส\.)\s*/, '').replace(/\s+/g, ' ').trim();
+    const knownAbbr = new Set(employees.map(e => e.abbr).filter(Boolean));
+    for (const dStr of Object.keys(dayColMap)) {
+      for (const unit of ['วช.', 'วฟ.', 'วส.']) {
+        for (const sh of ['M', 'N']) {
+          // สิ่งที่ต้องมีคนแทน
+          const needs = [];
+          for (const emp of employees) {
+            const s = emp.schedule[dStr];
+            if (!s || !s.update || s.update.type !== 'leave') continue;
+            const md = s.mainDecoded;
+            if (md && md.type === 'work' && md.shift === sh && md.unit === unit) {
+              needs.push({reason: 'leave', leaveOf: shortName(emp.name), leaveCode: s.update.code});
+            }
+          }
+          for (const v of vacancies) {
+            if (v.unit !== unit) continue;
+            const r1 = (v.r1[dStr] || '').toUpperCase();
+            if (r1.charAt(0) === sh) {
+              const ab = v.r2[dStr] || '';
+              needs.push({reason: 'vacancy', abbr: knownAbbr.has(ab) ? ab : ''});
+            }
+          }
+          // คนที่ไปแทน (เวรแทนเต็ม หรือ เวรครึ่งกะ — ครึ่งกะทั้งคู่นับเป็นการแทน 1 เวร)
+          const fillers = [], halves = [];
+          for (const emp of employees) {
+            const s = emp.schedule[dStr];
+            const u = s && s.update;
+            if (!u || u.shift !== sh || u.unit !== unit) continue;
+            if (u.type === 'sub') fillers.push({upds: [u], abbr: emp.abbr});
+            else if (u.type === 'half') halves.push(u);
+          }
+          if (halves.length) fillers.push({upds: halves, abbr: ''});
+
+          const apply = (f, need) => {
+            for (const u of f.upds) {
+              if (need) {
+                u.subReason = need.reason; u.leaveOf = need.leaveOf; u.leaveCode = need.leaveCode;
+              } else { u.subReason = 'unknown'; }
+              u.vacancyUnit = unit;
+            }
+          };
+          const pending = [];
+          // 1) จับคู่แม่นยำ: ตำแหน่งว่างที่ระบุชื่อย่อคนแทน
+          for (const f of fillers) {
+            const i = needs.findIndex(n => n.reason === 'vacancy' && n.abbr && n.abbr === f.abbr);
+            if (i >= 0) apply(f, needs.splice(i, 1)[0]); else pending.push(f);
+          }
+          // 2) ที่เหลือ: ผู้ลาก่อน แล้วตำแหน่งว่าง (ที่ไม่ได้ระบุชื่อคนอื่น)
+          for (const f of pending) {
+            let i = needs.findIndex(n => n.reason === 'leave');
+            if (i < 0) i = needs.findIndex(n => n.reason === 'vacancy' && !n.abbr);
+            apply(f, i >= 0 ? needs.splice(i, 1)[0] : null);
+          }
+        }
+      }
+    }
+  })();
 
   if (employees.length === 0) {
     // Debug: show what was found
