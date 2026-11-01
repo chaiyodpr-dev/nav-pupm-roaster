@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Version 64 -->
+<!-- Version 65 -->
 <html lang="th">
 <head>
 <meta charset="UTF-8">
@@ -349,7 +349,7 @@
 </div>
 
 <header>
-  <h1>📅 ตารางเวร ศภ.บภ ๑. (วช.บว.) <span style="font-size:0.65rem;opacity:0.6;font-weight:400">v64</span></h1>
+  <h1>📅 ตารางเวร ศภ.บภ ๑. (วช.บว.) <span style="font-size:0.65rem;opacity:0.6;font-weight:400">v65</span></h1>
   <p id="headerMonth">กรุณาอัปโหลดไฟล์ตารางเวร Excel</p>
 </header>
 
@@ -531,6 +531,15 @@ function toggleDebug(on) {
   showPersonSchedule();
 }
 
+// เวรครึ่งกะ (Me1/Me2/Ne1/Ne2...) → label เช่น "Me2" + คำอธิบายช่วงเวลา
+function halfLabel(h) {
+  const base = getShiftCellLabel({type:'work', shift:h.shift, unit:h.unit}, h.shift);
+  return base + h.half;
+}
+function halfTitle(h) {
+  return `เวรครึ่งกะ ${h.half === 1 ? 'ช่วงแรก' : 'ช่วงหลัง'} ${h.shift} ${h.unit} (${h.time})`;
+}
+
 function renderTodayPanel() {
   if (!scheduleData) return;
   const now = new Date();
@@ -610,17 +619,22 @@ function renderTodayPanel() {
       continue;
     }
 
-    // ปกติ ไม่มีอัพเดท (อาจมี half-shift เพิ่มเติม)
+    // เวรครึ่งกะ → แสดงเป็นรายการของกะนั้นเสมอ (แม้เวรหลักวันนั้นเป็นหยุด)
+    if (s.update && s.update.type === 'half') {
+      const h = s.update;
+      const hw = {name: emp.name, tagCls: 'tag-' + getUnitTagClass(h), fullLbl: halfLabel(h) + ' (' + h.time + ')',
+                  subNote: `ครึ่งกะ${h.half === 1 ? 'ช่วงแรก' : 'ช่วงหลัง'} ${h.unit}`, origFullLbl: null, rawStr};
+      if (h.shift === 'M') mWorkers.push(hw);
+      else if (h.shift === 'N') nWorkers.push(hw);
+    }
+
+    // ปกติ ไม่มีอัพเดท
     if (!dec || dec.type !== 'work') continue;
     const tagCls = 'tag-' + getUnitTagClass(dec);
     const fullLbl = getShiftFullLabel(dec, s.main);
     // half-shift note: "ทำงานต่อเนื่อง ช่วงแรก/หลัง [unit] [time]"
     let halfNote = null;
-    if (s.update && s.update.type === 'half') {
-      const h = s.update;
-      const halfWord = h.half === 1 ? 'ช่วงแรก' : 'ช่วงหลัง';
-      halfNote = `ทำงานต่อเนื่อง ${halfWord} ${h.unit} (${h.time})`;
-    }
+    // (เวรครึ่งกะแสดงเป็นรายการแยกด้านบนแล้ว)
     const worker = {name: emp.name, tagCls, fullLbl, subNote: halfNote, origFullLbl: null, rawStr};
     if (dec.shift === 'M') mWorkers.push(worker);
     if (dec.shift === 'N') nWorkers.push(worker);
@@ -756,15 +770,17 @@ function showPersonSchedule() {
         const cls = uc === 'MRN' ? 'cal-shift-MRN' : uc === 'MKB' ? 'cal-shift-MKB' : uc === 'NKB' ? 'cal-shift-NKB' : `cal-shift-${dec.shift}`;
         html += `<span class="cal-shift ${cls}" title="${fullLbl}${rawTip}">${cellLbl}${debugMode && s.raw ? `<br><span style="font-size:0.6rem;font-family:monospace;color:#64748b">${s.raw.r1||''}/${s.raw.r2||''}/${s.raw.r3||''}</span>` : ''}</span>`;
         if (s.update && s.update.type === 'half') {
-          const h = s.update;
-          const halfWord = h.half === 1 ? '1' : '2';
-          html += `<span class="cal-shift cal-shift-repl" title="ทำต่อเนื่อง ช่วง${halfWord} ${h.unit}">+${h.unit}</span>`;
+          html += `<span class="cal-shift cal-shift-repl" title="${halfTitle(s.update)}">${halfLabel(s.update)}*</span>`;
         }
       } else {
         // Off/ORN/other
         const cellLbl2 = getShiftCellLabel(dec, s.main);
         const fullLbl2 = getShiftFullLabel(dec, s.main);
         html += `<span class="cal-shift cal-shift-O" title="${fullLbl2}">${cellLbl2}${debugMode && s.raw ? `<br><span style="font-size:0.6rem;font-family:monospace;color:#64748b">${s.raw.r1||''}/${s.raw.r2||''}/${s.raw.r3||''}</span>` : ''}</span>`;
+        // หยุดแต่มีเวรครึ่งกะ (เช่น Os + Me2) → แสดงเวรครึ่งกะด้วย
+        if (s.update && s.update.type === 'half') {
+          html += `<span class="cal-shift cal-shift-repl" title="${halfTitle(s.update)}">${halfLabel(s.update)}*</span>`;
+        }
       }
     }
     html += `</div></div>`;
@@ -773,11 +789,12 @@ function showPersonSchedule() {
 
   // Summary table
   html += `<div class="shift-section"><h3>สรุปเดือน</h3>`;
-  let mCount = 0, nCount = 0, oCount = 0, leaveCount = 0, subCount = 0;
+  let mCount = 0, nCount = 0, oCount = 0, leaveCount = 0, subCount = 0, halfCount = 0;
   for (let d = 1; d <= maxDay; d++) {
     const s = emp.schedule[String(d)];
     if (!s) continue;
     const dec = s.mainDecoded;
+    if (s.update && s.update.type === 'half') halfCount++;
     if (s.update && s.update.type === 'leave') {
       leaveCount++;
       // ลา → นับตามเวรหลัก (เพื่อให้รู้ว่าขาดเวรอะไร)
@@ -805,6 +822,7 @@ function showPersonSchedule() {
     <div class="tag" style="background:var(--O-bg);color:var(--O)">O: ${oCount} วัน</div>
     ${leaveCount > 0 ? `<div class="tag" style="background:#fef3c7;color:#92400e">ลา: ${leaveCount} วัน</div>` : ''}
     ${subCount > 0 ? `<div class="tag tag-repl">แทนเวร: ${subCount} วัน</div>` : ''}
+    ${halfCount > 0 ? `<div class="tag tag-repl">เวรครึ่งกะ: ${halfCount} วัน</div>` : ''}
   </div></div>`;
 
   document.getElementById('searchContent').innerHTML = html;
