@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Version 63 -->
+<!-- Version 64 -->
 <html lang="th">
 <head>
 <meta charset="UTF-8">
@@ -318,12 +318,38 @@
     .cal-shift { font-size: 0.62rem; padding: 1px 3px; }
     .tabs { flex-direction: column; }
   }
+
+  /* ===== Password gate ===== */
+  body.locked > *:not(#lockScreen):not(script) { display: none !important; }
+  #lockScreen { display: none; }
+  body.locked #lockScreen {
+    display: flex; position: fixed; inset: 0; align-items: center; justify-content: center;
+    background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%); padding: 16px; z-index: 9999;
+  }
+  #lockBox { background: var(--card); border-radius: 14px; padding: 28px 24px; width: 100%; max-width: 340px;
+    box-shadow: 0 10px 40px rgba(0,0,0,.25); text-align: center; }
+  #lockBox h2 { margin: 0 0 4px; font-size: 1.15rem; }
+  #lockBox p { margin: 0 0 16px; font-size: .85rem; opacity: .7; }
+  #lockBox input { width: 100%; box-sizing: border-box; padding: 11px 12px; font-size: 1rem; border: 1px solid #cbd5e1; border-radius: 8px; }
+  #lockBox button { width: 100%; margin-top: 12px; padding: 11px; font-size: 1rem; border: 0; border-radius: 8px;
+    background: var(--primary); color: #fff; cursor: pointer; }
+  #lockErr { color: #dc2626; font-size: .85rem; min-height: 1.2em; margin-top: 10px; }
 </style>
 </head>
-<body>
+<body class="locked">
+
+<div id="lockScreen">
+  <form id="lockBox" autocomplete="off">
+    <h2>🔒 ตารางเวร ศภ.บภ ๑.</h2>
+    <p>กรุณากรอกรหัสผ่านเพื่อเข้าดูตารางเวร</p>
+    <input type="password" id="lockPw" placeholder="รหัสผ่าน" autofocus>
+    <button type="submit">เข้าสู่ระบบ</button>
+    <div id="lockErr"></div>
+  </form>
+</div>
 
 <header>
-  <h1>📅 ตารางเวร ศภ.บภ ๑. (วช.บว.) <span style="font-size:0.65rem;opacity:0.6;font-weight:400">v63</span></h1>
+  <h1>📅 ตารางเวร ศภ.บภ ๑. (วช.บว.) <span style="font-size:0.65rem;opacity:0.6;font-weight:400">v64</span></h1>
   <p id="headerMonth">กรุณาอัปโหลดไฟล์ตารางเวร Excel</p>
 </header>
 
@@ -1327,10 +1353,34 @@ function autoLoadFromGitHub() {
   });
 }
 
-// Auto-load on page open
-autoLoadFromGitHub();
-
-renderTodayPanel();
+// ===== Password gate (SHA-256 ของรหัสผ่าน ไม่เก็บข้อความตรงๆ) =====
+const PW_HASH = 'e327e9969f095c8b6d7fe48f4046fe1bedd9128aaf645e3de50276587bf2efe6';
+async function sha256Hex(t) {
+  const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(t));
+  return Array.from(new Uint8Array(b)).map(x => x.toString(16).padStart(2, '0')).join('');
+}
+let _started = false;
+function startApp() {
+  if (_started) return; _started = true;
+  document.body.classList.remove('locked');
+  try { sessionStorage.setItem('navUnlocked', '1'); } catch(e) {}
+  // Auto-load on page open
+  autoLoadFromGitHub();
+  renderTodayPanel();
+}
+document.getElementById('lockBox').addEventListener('submit', async function(ev) {
+  ev.preventDefault();
+  const err = document.getElementById('lockErr');
+  try {
+    const h = await sha256Hex(document.getElementById('lockPw').value);
+    if (h === PW_HASH) { err.textContent = ''; startApp(); }
+    else { err.textContent = 'รหัสผ่านไม่ถูกต้อง'; document.getElementById('lockPw').select(); }
+  } catch(e) { err.textContent = 'เบราว์เซอร์นี้ไม่รองรับ (ต้องเปิดผ่าน https)'; }
+});
+let _wasUnlocked = false;
+try { _wasUnlocked = sessionStorage.getItem('navUnlocked') === '1'; } catch(e) {}
+if (_wasUnlocked) startApp();
+else setTimeout(() => { const i = document.getElementById('lockPw'); if (i) i.focus(); }, 50);
 </script>
 </body>
 </html>
