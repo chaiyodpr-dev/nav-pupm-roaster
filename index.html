@@ -362,7 +362,7 @@
       <button class="upload-btn" onclick="autoLoadFromGitHub()" style="cursor:pointer;">🔄 รีโหลดจาก GitHub</button>
       <label class="upload-btn" for="fileInput" style="cursor:pointer;">📂 อัปโหลดไฟล์เอง</label>
       <input type="file" id="fileInput" accept=".xlsx">
-      <label class="upload-btn" for="ghFileInput" style="cursor:pointer;background:#16a34a;color:#fff;" title="อัปเดตตารางให้ทุกคนเห็น (ผู้ดูแลเท่านั้น)">⬆️ อัปโหลดขึ้น GitHub</label>
+      <button class="upload-btn" onclick="ghUploadGate()" style="cursor:pointer;background:#16a34a;color:#fff;" title="อัปเดตตารางให้ทุกคนเห็น (ต้องใช้รหัส)">🔒 ⬆️ อัปโหลดขึ้น GitHub</button>
       <input type="file" id="ghFileInput" accept=".xlsx" style="display:none">
       <button id="checkBtn" onclick="openCheckModal()" style="background:#0369a1;color:#fff;border:none;border-radius:10px;padding:9px 18px;font-size:0.92rem;font-family:inherit;cursor:pointer;font-weight:600;display:flex;align-items:center;gap:6px;">🔎 ตรวจสอบตารางเวร</button>
       <button id="leaveBtn" onclick="openLeaveModal()" style="background:#ea580c;color:#fff;border:none;border-radius:10px;padding:9px 18px;font-size:0.92rem;font-family:inherit;cursor:pointer;font-weight:600;display:flex;align-items:center;gap:6px;">🙋 ลา — ใครแทนได้</button>
@@ -1694,7 +1694,29 @@ function autoLoadFromGitHub() {
 
 // ===== อัปโหลด schedule.xlsx ขึ้น GitHub (ผู้ดูแล) =====
 const GH_REPO = 'chaiyodpr-dev/nav-pupm-roaster', GH_PATH = 'schedule.xlsx';
-function ghToken() {
+// รหัสเข้าปุ่มอัปโหลด (เก็บเป็น SHA-256) + Token ที่เข้ารหัสด้วยรหัสนี้ (AES-GCM/PBKDF2)
+const UP_PW_HASH = 'e4bb4404a9bedf8e6e6bf8e559cf966225ae515bebe2ad8f9fb9629a78a89c68';
+let GH_TOKEN_ENC = '';   // base64(salt16 + iv12 + ciphertext) — ว่าง = ให้ผู้ใช้ใส่ Token เอง
+let _upPw = '';
+async function decryptToken(pw, b64) {
+  const raw = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+  const km = await crypto.subtle.importKey('raw', new TextEncoder().encode(pw), 'PBKDF2', false, ['deriveKey']);
+  const key = await crypto.subtle.deriveKey({name: 'PBKDF2', salt: raw.slice(0, 16), iterations: 600000, hash: 'SHA-256'}, km, {name: 'AES-GCM', length: 256}, false, ['decrypt']);
+  const pt = await crypto.subtle.decrypt({name: 'AES-GCM', iv: raw.slice(16, 28)}, key, raw.slice(28));
+  return new TextDecoder().decode(pt);
+}
+async function ghUploadGate() {
+  const pw = prompt('ใส่รหัสผู้ดูแลเพื่ออัปโหลดตารางขึ้น GitHub');
+  if (pw === null) return;
+  if (await sha256Hex(pw.trim()) !== UP_PW_HASH) { alert('รหัสไม่ถูกต้อง'); return; }
+  _upPw = pw.trim();
+  document.getElementById('ghFileInput').click();
+}
+async function ghToken() {
+  if (GH_TOKEN_ENC && _upPw) { try { return await decryptToken(_upPw, GH_TOKEN_ENC); } catch(e) {} }
+  return ghTokenManual();
+}
+function ghTokenManual() {
   let t = ''; try { t = localStorage.getItem('navGhToken') || ''; } catch(e) {}
   if (!t) {
     t = (prompt('ใส่ GitHub Token ของผู้ดูแล (ครั้งแรกครั้งเดียว — จะจำไว้ในเครื่องนี้เท่านั้น)\nสร้างที่ GitHub → Settings → Developer settings → Fine-grained tokens\nให้สิทธิ์ Contents: Read and write เฉพาะ repo nav-pupm-roaster') || '').trim();
@@ -1721,7 +1743,7 @@ document.getElementById('ghFileInput').addEventListener('change', function(e) {
       try {
         await parseExcel(buf, file.name);   // ตรวจว่าอ่านได้ก่อน และแสดงผลในหน้านี้
         if (!confirm(`อัปโหลด "${file.name}" (${scheduleData.month_name}) ขึ้น GitHub เพื่อให้ทุกคนเห็นตารางนี้?`)) { status.textContent = 'ยกเลิกการอัปโหลดขึ้น GitHub (ยังแสดงเฉพาะในเครื่องนี้)'; return; }
-        const tok = ghToken(); if (!tok) return fail('ไม่มี Token — ยังไม่ได้อัปโหลดขึ้น GitHub');
+        const tok = await ghToken(); if (!tok) return fail('ไม่มี Token — ยังไม่ได้อัปโหลดขึ้น GitHub');
         status.textContent = '⏳ กำลังอัปโหลดขึ้น GitHub...';
         const api = `https://api.github.com/repos/${GH_REPO}/contents/${GH_PATH}`;
         const H = {'Authorization': 'Bearer ' + tok, 'Accept': 'application/vnd.github+json'};
