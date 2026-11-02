@@ -440,6 +440,11 @@
       <select id="personSelect" onchange="showPersonSchedule()">
         <option value="">-- กรุณาเลือก --</option>
       </select>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
+        <button onclick="downloadIcs('person')" style="background:#2563eb;color:#fff;border:none;border-radius:8px;padding:8px 14px;font-family:inherit;font-size:0.88rem;cursor:pointer;font-weight:600;">📅 เพิ่มเข้า Google Calendar (คนที่เลือก)</button>
+        <button onclick="downloadIcs('all')" style="background:#475569;color:#fff;border:none;border-radius:8px;padding:8px 14px;font-family:inherit;font-size:0.88rem;cursor:pointer;font-weight:600;">📅 ทั้งเดือน ทุกคน (.ics)</button>
+      </div>
+      <div style="font-size:0.78rem;color:#64748b;margin-top:6px;">ดาวน์โหลดไฟล์ .ics แล้วเปิดใน Google Calendar: ⚙️ การตั้งค่า → นำเข้าและส่งออก → นำเข้า (แนะนำเลือกปฏิทินใหม่ เพื่อลบทิ้งง่ายถ้าตารางเปลี่ยน)</div>
     </div>
     <div id="missingDaysBox" style="display:none;margin-bottom:14px;padding:12px 16px;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;">
       <div style="font-weight:700;color:#dc2626;margin-bottom:8px;font-size:0.95rem;">⚠️ วันที่เวรไม่ครบ (Mn/Me/Nn/Ne)</div>
@@ -1487,9 +1492,68 @@ function effectiveDay(emp, d) {
   if (u && u.type === 'sub') shifts.push({shift: u.shift, unit: u.unit, label: u.raw});
   else {
     if (s.mainDecoded && s.mainDecoded.type === 'work') shifts.push({shift: s.mainDecoded.shift, unit: s.mainDecoded.unit, label: s.main});
-    if (u && u.type === 'half') shifts.push({shift: u.shift, unit: u.unit, label: u.raw});
+    if (u && u.type === 'half') shifts.push({shift: u.shift, unit: u.unit, label: u.raw, half: u.half, time: u.time});
   }
   return {state: shifts.length ? 'work' : 'off', shifts};
+}
+
+// ============================================================
+// ส่งออก .ics (Google Calendar)
+// ============================================================
+function buildIcsEvents(emp, withName) {
+  const yr = scheduleData.year - 543, mo = scheduleData.month;
+  const p2 = n => String(n).padStart(2, '0');
+  const stamp = (d, hm) => { const t = new Date(yr, mo - 1, d); const [h, m] = hm.split(':'); t.setHours(+h, +m, 0, 0);
+    return `${t.getFullYear()}${p2(t.getMonth()+1)}${p2(t.getDate())}T${p2(t.getHours())}${p2(t.getMinutes())}00`; };
+  const esc = t => String(t).replace(/([,;\\])/g, '\\$1');
+  const out = [];
+  for (let d = 1; d <= scheduleData.max_day; d++) {
+    const e = effectiveDay(emp, d);
+    if (!e || e.state !== 'work') continue;
+    e.shifts.forEach(sh => {
+      let a, b, extra = '';
+      if (sh.half) { [a, b] = sh.time.split('-'); extra = ` ครึ่งกะ${sh.half === 1 ? 'แรก' : 'หลัง'} (${sh.time})`; }
+      else if (sh.shift === 'M') { a = '06:30'; b = '18:30'; }
+      else { a = '18:30'; b = '06:30'; }
+      // วันเริ่ม/จบ: N เริ่ม 18:30 ของวัน d ; N2 (00:30) อยู่ในวันถัดไป
+      let sd = d, ed = d;
+      if (sh.shift === 'N') { if (sh.half === 2) { sd = d + 1; ed = d + 1; } else if (sh.half === 1) { ed = d + 1; } else { ed = d + 1; } }
+      const sub = e.shifts.length && emp.schedule[String(d)].update && emp.schedule[String(d)].update.type === 'sub';
+      const title = `${withName ? '[' + emp.abbr + '] ' : ''}${sh.shift} ${sh.unit}${sh.half ? sh.half : ''}${sub ? ' (แทนเวร)' : ''}`;
+      const color = sub || sh.half ? 'orange' : sh.shift === 'M' ? 'green' : 'purple';
+      out.push(['BEGIN:VEVENT',
+        `UID:${yr}${p2(mo)}${p2(d)}-${emp.abbr}-${sh.shift}${sh.unit}${sh.half || ''}@nav-roster`,
+        `DTSTAMP:${yr}${p2(mo)}01T000000Z`,
+        `DTSTART;TZID=Asia/Bangkok:${stamp(sd, a)}`,
+        `DTEND;TZID=Asia/Bangkok:${stamp(ed, b)}`,
+        `SUMMARY:${esc(title)}`,
+        `DESCRIPTION:${esc(emp.name + ' — เวร ' + sh.shift + ' ' + sh.unit + extra)}`,
+        `COLOR:${color}`,
+        'END:VEVENT'].join('\r\n'));
+    });
+  }
+  return out;
+}
+function downloadIcs(mode) {
+  if (!scheduleData) { alert('ยังไม่มีข้อมูลตารางเวร'); return; }
+  let emps, name, withName;
+  if (mode === 'all') { emps = scheduleData.employees; name = 'ALL'; withName = true; }
+  else {
+    const idx = document.getElementById('personSelect').value;
+    if (idx === '') { alert('กรุณาเลือกชื่อพนักงานก่อน'); return; }
+    emps = [scheduleData.employees[parseInt(idx)]]; name = emps[0].abbr; withName = false;
+  }
+  const events = emps.flatMap(em => buildIcsEvents(em, withName));
+  if (!events.length) { alert('ไม่พบเวรที่จะเพิ่ม'); return; }
+  const cal = ['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//NAV Roster//TH','CALSCALE:GREGORIAN','METHOD:PUBLISH',
+    `X-WR-CALNAME:ตารางเวร ${scheduleData.month_name}${mode === 'all' ? '' : ' ' + emps[0].abbr}`,'X-WR-TIMEZONE:Asia/Bangkok',
+    ...events,'END:VCALENDAR'].join('\r\n');
+  const blob = new Blob([cal], {type: 'text/calendar;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `roster_${scheduleData.year - 543}-${String(scheduleData.month).padStart(2,'0')}_${name}.ics`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
 }
 
 // ใบอนุญาตปฏิบัติงานแต่ละระบบงาน (ชื่อย่อจากแถวที่ 3 ของแต่ละคน)
