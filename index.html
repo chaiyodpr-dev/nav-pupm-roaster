@@ -442,7 +442,13 @@
       </select>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
         <button onclick="downloadIcs('person')" style="background:#2563eb;color:#fff;border:none;border-radius:8px;padding:8px 14px;font-family:inherit;font-size:0.88rem;cursor:pointer;font-weight:600;">📅 เพิ่มเข้า Google Calendar (คนที่เลือก)</button>
-        <button onclick="downloadIcs('all')" style="background:#475569;color:#fff;border:none;border-radius:8px;padding:8px 14px;font-family:inherit;font-size:0.88rem;cursor:pointer;font-weight:600;">📅 ทั้งเดือน ทุกคน (.ics)</button>
+        <button onclick="toggleIcsRemove()" style="background:#dc2626;color:#fff;border:none;border-radius:8px;padding:8px 14px;font-family:inherit;font-size:0.88rem;cursor:pointer;font-weight:600;">🗑 ลบของตัวเองออกจาก Google Calendar</button>
+      </div>
+      <div id="icsRemoveBox" style="display:none;margin-top:10px;padding:12px 14px;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;font-size:0.86rem;color:#7f1d1d;line-height:1.7;">
+        <b>วิธีลบ (เลือกชื่อตัวเองด้านบนก่อน)</b><br>
+        <b>วิธีที่ 1 (แนะนำ ชัวร์สุด):</b> ถ้านำเข้าไว้ในปฏิทินใหม่ → Google Calendar ฝั่งซ้าย เลื่อนไปที่ชื่อปฏิทินนั้น → ⋮ → การตั้งค่า → เลื่อนลงล่างสุด "ลบปฏิทิน"<br>
+        <b>วิธีที่ 2:</b> ถ้านำเข้าไว้ในปฏิทินหลักของตัวเอง กดปุ่มด้านล่างเพื่อดาวน์โหลดไฟล์ "ยกเลิกเวร" แล้วนำเข้าไฟล์นั้นซ้ำที่ปฏิทินเดิม (Google อาจไม่ลบให้ทุกกรณี ถ้าไม่ลบ ให้ลบเองโดยเปิดดูเดือนนั้น เลือกอีเวนต์ทีละอัน)<br>
+        <button onclick="downloadIcs('person', true)" style="margin-top:8px;background:#b91c1c;color:#fff;border:none;border-radius:8px;padding:7px 12px;font-family:inherit;font-size:0.85rem;cursor:pointer;">ดาวน์โหลดไฟล์ยกเลิกเวร (.ics)</button>
       </div>
       <div style="font-size:0.78rem;color:#64748b;margin-top:6px;">ดาวน์โหลดไฟล์ .ics แล้วเปิดใน Google Calendar: ⚙️ การตั้งค่า → นำเข้าและส่งออก → นำเข้า (แนะนำเลือกปฏิทินใหม่ เพื่อลบทิ้งง่ายถ้าตารางเปลี่ยน)</div>
     </div>
@@ -1500,7 +1506,8 @@ function effectiveDay(emp, d) {
 // ============================================================
 // ส่งออก .ics (Google Calendar)
 // ============================================================
-function buildIcsEvents(emp, withName) {
+function toggleIcsRemove() { const b = document.getElementById('icsRemoveBox'); b.style.display = b.style.display === 'none' ? 'block' : 'none'; }
+function buildIcsEvents(emp, withName, cancel) {
   const yr = scheduleData.year - 543, mo = scheduleData.month;
   const p2 = n => String(n).padStart(2, '0');
   const stamp = (d, hm) => { const t = new Date(yr, mo - 1, d); const [h, m] = hm.split(':'); t.setHours(+h, +m, 0, 0);
@@ -1529,12 +1536,13 @@ function buildIcsEvents(emp, withName) {
         `SUMMARY:${esc(title)}`,
         `DESCRIPTION:${esc(emp.name + ' — เวร ' + sh.shift + ' ' + sh.unit + extra)}`,
         `COLOR:${color}`,
+        ...(cancel ? ['STATUS:CANCELLED', 'SEQUENCE:1'] : []),
         'END:VEVENT'].join('\r\n'));
     });
   }
   return out;
 }
-function downloadIcs(mode) {
+function downloadIcs(mode, cancel) {
   if (!scheduleData) { alert('ยังไม่มีข้อมูลตารางเวร'); return; }
   let emps, name, withName;
   if (mode === 'all') { emps = scheduleData.employees; name = 'ALL'; withName = true; }
@@ -1543,15 +1551,15 @@ function downloadIcs(mode) {
     if (idx === '') { alert('กรุณาเลือกชื่อพนักงานก่อน'); return; }
     emps = [scheduleData.employees[parseInt(idx)]]; name = emps[0].abbr; withName = false;
   }
-  const events = emps.flatMap(em => buildIcsEvents(em, withName));
+  const events = emps.flatMap(em => buildIcsEvents(em, withName, cancel));
   if (!events.length) { alert('ไม่พบเวรที่จะเพิ่ม'); return; }
-  const cal = ['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//NAV Roster//TH','CALSCALE:GREGORIAN','METHOD:PUBLISH',
+  const cal = ['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//NAV Roster//TH','CALSCALE:GREGORIAN',cancel ? 'METHOD:CANCEL' : 'METHOD:PUBLISH',
     `X-WR-CALNAME:ตารางเวร ${scheduleData.month_name}${mode === 'all' ? '' : ' ' + emps[0].abbr}`,'X-WR-TIMEZONE:Asia/Bangkok',
     ...events,'END:VCALENDAR'].join('\r\n');
   const blob = new Blob([cal], {type: 'text/calendar;charset=utf-8'});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `roster_${scheduleData.year - 543}-${String(scheduleData.month).padStart(2,'0')}_${name}.ics`;
+  a.download = `${cancel ? 'CANCEL_' : ''}roster_${scheduleData.year - 543}-${String(scheduleData.month).padStart(2,'0')}_${name}.ics`;
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 2000);
 }
