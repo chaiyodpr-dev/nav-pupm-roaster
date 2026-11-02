@@ -1492,6 +1492,14 @@ function effectiveDay(emp, d) {
   return {state: shifts.length ? 'work' : 'off', shifts};
 }
 
+// ใบอนุญาตปฏิบัติงานแต่ละระบบงาน (ชื่อย่อจากแถวที่ 3 ของแต่ละคน)
+// ยืนยันโดยผู้ใช้ พ.ย. 2569 — วช.=n, วส.=c, วฟ.=e
+const LICENSES = {
+  'วช.': ['SR','SC','PP','PN','CP','PS','PC'],
+  'วส.': ['SB'],
+  'วฟ.': ['CP','PS','PC','SB','SN','ST'],
+};
+
 function openLeaveModal() {
   if (!scheduleData) { alert('กรุณาโหลดข้อมูลตารางก่อน'); return; }
   const dayEl = document.getElementById('leaveDay');
@@ -1534,6 +1542,8 @@ function showLeaveSubs() {
       holders.push({name, label: cur.shifts.filter(x => x.shift === shift && x.unit === unit).map(x => x.label).join('+')});
       continue;
     }
+    // ใบอนุญาต: ต้องมีใบอนุญาตของระบบงานนั้น
+    if (!(LICENSES[unit] || []).includes(emp.abbr)) { no.push({name, why: `ไม่มีใบอนุญาต ${unit}`}); continue; }
     if (cur.state === 'leave') { no.push({name, why: `ลาอยู่แล้ว (${cur.code})`}); continue; }
     if (cur.state === 'work') {
       no.push({name, why: 'ติดเวร ' + cur.shifts.map(x => `${x.label} (${x.shift} ${x.unit})`).join(' + ')});
@@ -1544,10 +1554,9 @@ function showLeaveSubs() {
     const prev = effectiveDay(emp, day - 1), next = effectiveDay(emp, day + 1);
     const works = (e, sh) => e && e.state === 'work' && e.shifts.some(x => x.shift === sh);
     const warns = [];
-    if (shift === 'M' && works(prev, 'N')) { no.push({name, why: 'ออกเวร N เมื่อเช้า 06:30 ของวันนี้ (เข้า M ต่อเลยไม่ได้พัก)'}); continue; }
-    if (shift === 'N' && works(next, 'M')) { no.push({name, why: 'พรุ่งนี้มีเวร M 06:30 (ออกเวร N แล้วเข้า M ต่อเลย)'}); continue; }
-    if (shift === 'N' && works(prev, 'N')) warns.push('เมื่อวานเข้าเวร N (N ติดกัน 2 คืน)');
-    if (shift === 'N' && works(next, 'N')) warns.push('พรุ่งนี้มีเวร N (N ติดกัน 2 คืน)');
+    // กฎ: ห้ามทำงานต่อเนื่องเกิน 12 ชม. → M ต่อ N / N ต่อ M ไม่ได้
+    if (shift === 'M' && works(prev, 'N')) { no.push({name, why: 'ออกเวร N ตอน 06:30 ของวันนี้ (เข้า M ต่อ = ทำงานต่อเนื่องเกิน 12 ชม.)'}); continue; }
+    if (shift === 'N' && works(next, 'M')) { no.push({name, why: 'พรุ่งนี้มีเวร M 06:30 (ออกเวร N แล้วเข้า M ต่อ = ทำงานต่อเนื่องเกิน 12 ชม.)'}); continue; }
     if (shift === 'M' && prev && prev.state === 'leave') warns.push('เมื่อวานลา ' + prev.code);
 
     const home = emp.homeUnit === unit;
@@ -1568,7 +1577,7 @@ function showLeaveSubs() {
       const tags = [];
       if (c.home) tags.push(`<span style="background:#dcfce7;color:#166534;border-radius:5px;padding:1px 7px;font-size:0.78rem;">กองประจำ ${unit}</span>`);
       else if (c.unitDays > 0) tags.push(`<span style="background:#e0f2fe;color:#075985;border-radius:5px;padding:1px 7px;font-size:0.78rem;">เคยเข้า ${unit} ${c.unitDays} วัน</span>`);
-      else tags.push(`<span style="background:#f1f5f9;color:#475569;border-radius:5px;padding:1px 7px;font-size:0.78rem;">ต่างกอง</span>`);
+      else tags.push(`<span style="background:#f1f5f9;color:#475569;border-radius:5px;padding:1px 7px;font-size:0.78rem;">มีใบอนุญาต ${unit} (ต่างกอง)</span>`);
       html += `<div style="padding:8px 0;border-bottom:1px solid #f1f5f9;">
         <div><b>${c.name}</b> ${tags.join(' ')} <span style="color:#94a3b8;font-size:0.8rem;">· เวรเดือนนี้ ${c.workDays} วัน · วันนี้หยุด</span></div>
         ${c.warns.map(w => `<div style="color:#b45309;font-size:0.82rem;">⚠️ ${w}</div>`).join('')}
@@ -1581,7 +1590,7 @@ function showLeaveSubs() {
       ${no.map(n => `<div style="padding:5px 0;border-bottom:1px solid #f8fafc;font-size:0.88rem;"><b>${n.name}</b> <span style="color:#64748b;">— ${n.why}</span></div>`).join('')}
     </details>`;
   }
-  html += `<div style="margin-top:14px;font-size:0.78rem;color:#94a3b8;line-height:1.5;">เกณฑ์: ว่าง = วันนั้นหยุด ไม่ลา และไม่ต้องเข้าเวรติดกันโดยไม่ได้พัก (N→M, M→N) · เรียงตามกองประจำ → เคยเข้ากองนี้ → เวรเดือนนี้น้อยที่สุด · เป็นข้อมูลช่วยตัดสินใจ ไม่ได้ตรวจสิทธิ์/ใบอนุญาตของแต่ละคน</div>`;
+  html += `<div style="margin-top:14px;font-size:0.78rem;color:#94a3b8;line-height:1.5;">เกณฑ์: ต้องมีใบอนุญาตระบบงานนั้น · ว่าง = วันนั้นหยุดและไม่ลา · ห้ามทำงานต่อเนื่องเกิน 12 ชม. (M ต่อ N และ N ต่อ M ไม่ได้) · เรียงตามกองประจำ → เคยเข้ากองนี้ → เวรเดือนนี้น้อยที่สุด · เป็นข้อมูลช่วยตัดสินใจ</div>`;
   el.innerHTML = html;
 }
 
