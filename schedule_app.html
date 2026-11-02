@@ -362,6 +362,8 @@
       <button class="upload-btn" onclick="autoLoadFromGitHub()" style="cursor:pointer;">🔄 รีโหลดจาก GitHub</button>
       <label class="upload-btn" for="fileInput" style="cursor:pointer;">📂 อัปโหลดไฟล์เอง</label>
       <input type="file" id="fileInput" accept=".xlsx">
+      <label class="upload-btn" for="ghFileInput" style="cursor:pointer;background:#16a34a;color:#fff;" title="อัปเดตตารางให้ทุกคนเห็น (ผู้ดูแลเท่านั้น)">⬆️ อัปโหลดขึ้น GitHub</label>
+      <input type="file" id="ghFileInput" accept=".xlsx" style="display:none">
       <button id="checkBtn" onclick="openCheckModal()" style="background:#0369a1;color:#fff;border:none;border-radius:10px;padding:9px 18px;font-size:0.92rem;font-family:inherit;cursor:pointer;font-weight:600;display:flex;align-items:center;gap:6px;">🔎 ตรวจสอบตารางเวร</button>
       <button id="leaveBtn" onclick="openLeaveModal()" style="background:#ea580c;color:#fff;border:none;border-radius:10px;padding:9px 18px;font-size:0.92rem;font-family:inherit;cursor:pointer;font-weight:600;display:flex;align-items:center;gap:6px;">🙋 ลา — ใครแทนได้</button>
     </div>
@@ -1689,6 +1691,58 @@ function autoLoadFromGitHub() {
       });
   });
 }
+
+// ===== อัปโหลด schedule.xlsx ขึ้น GitHub (ผู้ดูแล) =====
+const GH_REPO = 'chaiyodpr-dev/nav-pupm-roaster', GH_PATH = 'schedule.xlsx';
+function ghToken() {
+  let t = ''; try { t = localStorage.getItem('navGhToken') || ''; } catch(e) {}
+  if (!t) {
+    t = (prompt('ใส่ GitHub Token ของผู้ดูแล (ครั้งแรกครั้งเดียว — จะจำไว้ในเครื่องนี้เท่านั้น)\nสร้างที่ GitHub → Settings → Developer settings → Fine-grained tokens\nให้สิทธิ์ Contents: Read and write เฉพาะ repo nav-pupm-roaster') || '').trim();
+    if (t) { try { localStorage.setItem('navGhToken', t); } catch(e) {} }
+  }
+  return t;
+}
+function bufToB64(buf) {
+  const u = new Uint8Array(buf); let bin = '';
+  for (let i = 0; i < u.length; i += 0x8000) bin += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+document.getElementById('ghFileInput').addEventListener('change', function(e) {
+  const file = e.target.files[0]; e.target.value = '';
+  if (!file) return;
+  const status = document.getElementById('uploadStatus');
+  const fail = m => { status.textContent = '❌ ' + m; status.className = 'upload-status error'; };
+  if (!file.name.toLowerCase().endsWith('.xlsx')) return fail('รองรับเฉพาะไฟล์ .xlsx');
+  status.textContent = '⏳ กำลังตรวจไฟล์...'; status.className = 'upload-status';
+  loadSheetJS(() => {
+    const reader = new FileReader();
+    reader.onload = async evt => {
+      const buf = evt.target.result;
+      try {
+        await parseExcel(buf, file.name);   // ตรวจว่าอ่านได้ก่อน และแสดงผลในหน้านี้
+        if (!confirm(`อัปโหลด "${file.name}" (${scheduleData.month_name}) ขึ้น GitHub เพื่อให้ทุกคนเห็นตารางนี้?`)) { status.textContent = 'ยกเลิกการอัปโหลดขึ้น GitHub (ยังแสดงเฉพาะในเครื่องนี้)'; return; }
+        const tok = ghToken(); if (!tok) return fail('ไม่มี Token — ยังไม่ได้อัปโหลดขึ้น GitHub');
+        status.textContent = '⏳ กำลังอัปโหลดขึ้น GitHub...';
+        const api = `https://api.github.com/repos/${GH_REPO}/contents/${GH_PATH}`;
+        const H = {'Authorization': 'Bearer ' + tok, 'Accept': 'application/vnd.github+json'};
+        const cur = await fetch(api + '?ref=main&t=' + Date.now(), {headers: H, cache: 'no-store'});
+        let sha;
+        if (cur.status === 200) sha = (await cur.json()).sha;
+        else if (cur.status !== 404) throw {status: cur.status};
+        const res = await fetch(api, {method: 'PUT', headers: H, body: JSON.stringify({
+          message: `Update schedule.xlsx (${scheduleData.month_name}) via web app`, content: bufToB64(buf), branch: 'main', ...(sha ? {sha} : {}) })});
+        if (!res.ok) throw {status: res.status};
+        status.textContent = `✅ อัปโหลดขึ้น GitHub แล้ว (${scheduleData.month_name}) — คนอื่นจะเห็นภายใน 1–5 นาที`;
+        status.className = 'upload-status ok';
+      } catch (err) {
+        if (err && (err.status === 401 || err.status === 403)) { try { localStorage.removeItem('navGhToken'); } catch(e) {} fail('Token ไม่ถูกต้องหรือไม่มีสิทธิ์เขียน (HTTP ' + err.status + ') — ลองกดใหม่เพื่อใส่ Token ใหม่'); }
+        else if (err && err.status) fail('อัปโหลดขึ้น GitHub ไม่สำเร็จ (HTTP ' + err.status + ')');
+        else fail('เกิดข้อผิดพลาด: ' + (err && err.message || err));
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  });
+});
 
 // ===== Password gate (SHA-256 ของรหัสผ่าน ไม่เก็บข้อความตรงๆ) =====
 const PW_HASH = 'e327e9969f095c8b6d7fe48f4046fe1bedd9128aaf645e3de50276587bf2efe6';
