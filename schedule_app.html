@@ -1696,7 +1696,7 @@ function autoLoadFromGitHub() {
 const GH_REPO = 'chaiyodpr-dev/nav-pupm-roaster', GH_PATH = 'schedule.xlsx';
 // รหัสเข้าปุ่มอัปโหลด (เก็บเป็น SHA-256) + Token ที่เข้ารหัสด้วยรหัสนี้ (AES-GCM/PBKDF2)
 const UP_PW_HASH = 'e4bb4404a9bedf8e6e6bf8e559cf966225ae515bebe2ad8f9fb9629a78a89c68';
-let GH_TOKEN_ENC = '';   // base64(salt16 + iv12 + ciphertext) — ว่าง = ให้ผู้ใช้ใส่ Token เอง
+let GH_TOKEN_ENC = '64anVP1udetl/Gtvebs+N6lu+l2Q4VM0qDwkKCtzjlrRe3iE+yeCmszMCbsxTnj1nQkh/gK3CSEYGWB/8eqwN6oWUDgTM9skxIZfjXjudH3rL5avHS7HC/L5jhhSr0vKn0J1M2k1LxA5MMuA+m5Fiy5vgq5KQ/0JRbSDxjGa0VVoLG+536B1Ra4=';   // base64(salt16 + iv12 + ciphertext) — ว่าง = ให้ผู้ใช้ใส่ Token เอง
 let _upPw = '';
 async function decryptToken(pw, b64) {
   const raw = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
