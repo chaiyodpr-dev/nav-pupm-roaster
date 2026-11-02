@@ -367,6 +367,7 @@
       <button id="checkBtn" onclick="openCheckModal()" style="background:#0369a1;color:#fff;border:none;border-radius:10px;padding:9px 18px;font-size:0.92rem;font-family:inherit;cursor:pointer;font-weight:600;display:flex;align-items:center;gap:6px;">🔎 ตรวจสอบตารางเวร</button>
       <button id="leaveBtn" onclick="openLeaveModal()" style="background:#ea580c;color:#fff;border:none;border-radius:10px;padding:9px 18px;font-size:0.92rem;font-family:inherit;cursor:pointer;font-weight:600;display:flex;align-items:center;gap:6px;">🙋 ลา — ใครแทนได้</button>
     </div>
+    <div id="scheduleUpdated" style="font-size:0.88rem;color:#0f766e;font-weight:600;margin:4px 0;"></div>
     <div class="upload-status" id="uploadStatus">รองรับไฟล์ .xlsx และ .xlsm</div>
     <div id="lastUpdated" style="display:none;margin-top:6px;font-size:0.82rem;color:#0369a1;font-weight:600;"></div>
   </div>
@@ -1673,6 +1674,22 @@ function showLeaveSubs() {
 // ============================================================
 const SCHEDULE_XLSX_URL = 'https://raw.githubusercontent.com/chaiyodpr-dev/nav-pupm-roaster/main/schedule.xlsx';
 
+// แสดงวัน-เวลาที่ไฟล์ schedule.xlsx ถูกอัปเดตล่าสุดบน GitHub (เวลาไทย)
+function showScheduleUpdated() {
+  const el = document.getElementById('scheduleUpdated');
+  el.textContent = '';
+  fetch(`https://api.github.com/repos/${GH_REPO}/commits?path=${GH_PATH}&sha=main&per_page=1&t=${Date.now()}`, {headers: {'Accept': 'application/vnd.github+json'}, cache: 'no-store'})
+    .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+    .then(j => {
+      const iso = j[0] && j[0].commit && (j[0].commit.committer || j[0].commit.author).date;
+      if (!iso) return;
+      const d = new Date(iso);
+      const fmt = new Intl.DateTimeFormat('th-TH-u-ca-buddhist', {timeZone: 'Asia/Bangkok', day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false}).format(d);
+      el.textContent = `🕒 ตารางเวรนี้อัปเดตล่าสุดบน GitHub: ${fmt} น.`;
+    })
+    .catch(() => { el.textContent = ''; });
+}
+
 function autoLoadFromGitHub() {
   const status = document.getElementById('uploadStatus');
   status.textContent = '⏳ กำลังโหลดตารางเวรจาก GitHub...';
@@ -1684,6 +1701,7 @@ function autoLoadFromGitHub() {
         await parseExcel(buf, 'schedule.xlsx');
         status.textContent = '✅ โหลดจาก GitHub สำเร็จ — กดปุ่มรีโหลดเพื่ออัปเดต';
         status.className = 'upload-status ok';
+        showScheduleUpdated();
       })
       .catch(err => {
         status.textContent = '❌ โหลดจาก GitHub ไม่ได้: ' + err.message + ' — กรุณาอัปโหลดไฟล์เอง';
