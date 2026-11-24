@@ -1524,9 +1524,11 @@ function openCheckModal() {
         <span style="margin-left:auto;">${slotText(slots)}</span>
       </div>`;
 
+  const contRows = [];
+  for (const emp of scheduleData.employees) for (const v of continuousViolations(emp)) contRows.push({name: emp.name, ...v});
   const streakRows = [];
   for (const emp of scheduleData.employees) for (const st of workStreaks(emp)) if (st.len >= MAX_CONSEC_DAYS) streakRows.push({name: emp.name, ...st});
-  if (missing.length === 0 && dupDays.length === 0 && streakRows.length === 0) {
+  if (missing.length === 0 && dupDays.length === 0 && streakRows.length === 0 && contRows.length === 0) {
     el.innerHTML = dataSource + `<div style="color:#16a34a;font-weight:700;font-size:1rem;text-align:center;padding:20px;">✅ ครบทุกเวรทุกวัน ไม่มีวันที่ขาดหรือซ้ำ!</div>`;
   } else {
     let out = dataSource + `<div style="font-size:0.82rem;color:#64748b;margin-bottom:10px;">เวรที่ตรวจ: Mn (เช้า วช.), Me (เช้า วฟ.), Nn (ดึก วช.), Ne (ดึก วฟ.)</div>`;
@@ -1537,6 +1539,10 @@ function openCheckModal() {
     if (dupDays.length > 0) {
       out += `<div style="font-weight:700;margin:14px 0 4px;color:#b45309;">พบ ${dupDays.length} วัน ที่มีเวรซ้ำ (มีคนเกิน 1 คน)</div>` +
         dupDays.map(({day, slots, dup}) => rowHtml(day, 'ซ้ำ', dup.map(k => chip(k + '×' + slots[k],'#fffbeb','#fde68a','#b45309')).join(''), slots)).join('');
+    }
+    if (contRows.length > 0) {
+      out += `<div style="font-weight:700;margin:14px 0 4px;color:#be123c;">พบ ${contRows.length} ช่วง ที่ปฏิบัติงานต่อเนื่องเกิน 12 ชั่วโมง</div>` +
+        contRows.map(r => `<div style="padding:5px 0;border-bottom:1px solid #f1f5f9;font-size:0.9rem;"><b>${r.name}</b> · ${r.text} <span style="color:#be123c;">(ต่อเนื่อง ${r.hours} ชม.)</span></div>`).join('');
     }
     if (streakRows.length > 0) {
       out += `<div style="font-weight:700;margin:14px 0 4px;color:#7c3aed;">พบ ${streakRows.length} ช่วง ที่ปฏิบัติงานติดกันตั้งแต่ ${MAX_CONSEC_DAYS} วัน</div>` +
@@ -1645,6 +1651,37 @@ function workStreaks(emp) {
     if (!w && start !== null) { out.push({start, end: d - 1, len: d - start}); start = null; }
   }
   return out;
+}
+
+// กฎ: ห้ามทำงานต่อเนื่องกันเกิน 12 ชม. — ตรวจจากช่วงเวลาจริงของทุกเวร (M 06:30–18:30, N 18:30–06:30, ครึ่งกะ, D 08:00–17:00)
+function shiftIntervals(emp) {
+  const out = [], toMin = hm => { const [h, m] = hm.split(':').map(Number); return h * 60 + m; };
+  for (let d = 1; d <= scheduleData.max_day; d++) {
+    const e = effectiveDay(emp, d), base = (d - 1) * 1440;
+    if (!e) continue;
+    if (e.state === 'day') { out.push({a: base + 480, b: base + 1020, day: d, label: 'D'}); continue; }
+    if (e.state !== 'work') continue;
+    for (const sh of e.shifts) {
+      let a, b;
+      if (sh.half) { let [x, y] = sh.time.split('-').map(toMin); if (y <= x) y += 1440; a = base + x; b = base + y;
+        if (sh.shift === 'N' && sh.half === 2) { a += 1440; b += 1440; } }
+      else if (sh.shift === 'M') { a = base + 390; b = base + 1110; }
+      else { a = base + 1110; b = base + 1110 + 720; }
+      out.push({a, b, day: d, label: sh.shift + (sh.unit || '') + (sh.half || '')});
+    }
+  }
+  return out.sort((x, y) => x.a - y.a);
+}
+function continuousViolations(emp) {
+  const iv = shiftIntervals(emp), res = [];
+  let cur = null;
+  const flush = () => { if (cur && cur.b - cur.a > 720) res.push(cur); };
+  for (const x of iv) {
+    if (cur && x.a <= cur.b) { cur.b = Math.max(cur.b, x.b); cur.items.push(x); }
+    else { flush(); cur = {a: x.a, b: x.b, items: [x]}; }
+  }
+  flush();
+  return res.map(r => ({hours: Math.round((r.b - r.a) / 60 * 10) / 10, text: r.items.map(i => `วันที่ ${i.day} ${i.label}`).join(' → ')}));
 }
 
 // ใบอนุญาตปฏิบัติงานแต่ละระบบงาน (ชื่อย่อจากแถวที่ 3 ของแต่ละคน)
