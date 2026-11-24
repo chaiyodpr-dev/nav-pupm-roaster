@@ -1541,8 +1541,8 @@ function openCheckModal() {
         dupDays.map(({day, slots, dup}) => rowHtml(day, 'ซ้ำ', dup.map(k => chip(k + '×' + slots[k],'#fffbeb','#fde68a','#b45309')).join(''), slots)).join('');
     }
     if (contRows.length > 0) {
-      out += `<div style="font-weight:700;margin:14px 0 4px;color:#be123c;">พบ ${contRows.length} ช่วง ที่ปฏิบัติงานต่อเนื่องเกิน 12 ชั่วโมง (${contRows.filter(r => r.hours > 18).length} ช่วงเกิน 18 ชั่วโมง)</div>` +
-        contRows.map(r => `<div style="padding:5px 0;border-bottom:1px solid #f1f5f9;font-size:0.9rem;"><b>${r.name}</b> · ${r.text} <span style="color:#be123c;">(ต่อเนื่อง ${r.hours} ชม.)</span>${r.hours > 18 ? ' <b style="background:#be123c;color:#fff;border-radius:5px;padding:1px 7px;font-size:0.78rem;">เกิน 18 ชม.</b>' : ''}</div>`).join('');
+      out += `<div style="font-weight:700;margin:14px 0 4px;color:#be123c;">พบ ${contRows.length} ช่วง ที่ปฏิบัติงานต่อเนื่องเกิน 18 ชั่วโมง</div>` +
+        contRows.map(r => `<div style="padding:5px 0;border-bottom:1px solid #f1f5f9;font-size:0.9rem;"><b>${r.name}</b> · ${r.text} <span style="color:#be123c;">(ต่อเนื่อง ${r.hours} ชม.)</span></div>`).join('');
     }
     if (streakRows.length > 0) {
       out += `<div style="font-weight:700;margin:14px 0 4px;color:#7c3aed;">พบ ${streakRows.length} ช่วง ที่ปฏิบัติงานติดกันตั้งแต่ ${MAX_CONSEC_DAYS} วัน</div>` +
@@ -1653,7 +1653,8 @@ function workStreaks(emp) {
   return out;
 }
 
-// กฎ: ห้ามทำงานต่อเนื่องกันเกิน 12 ชม. — ตรวจจากช่วงเวลาจริงของทุกเวร (M 06:30–18:30, N 18:30–06:30, ครึ่งกะ, D 08:00–17:00)
+// กฎ: ห้ามทำงานต่อเนื่องกันเกิน 18 ชม. (ยกเลิกกฎ 12 ชม. 24 พ.ย. 2569) — ตรวจจากช่วงเวลาจริงของทุกเวร (M 06:30–18:30, N 18:30–06:30, ครึ่งกะ, D 08:00–17:00)
+const MAX_CONT_MIN = 18 * 60;
 function shiftIntervals(emp) {
   const out = [], toMin = hm => { const [h, m] = hm.split(':').map(Number); return h * 60 + m; };
   for (let d = 1; d <= scheduleData.max_day; d++) {
@@ -1672,10 +1673,22 @@ function shiftIntervals(emp) {
   }
   return out.sort((x, y) => x.a - y.a);
 }
+// ถ้าให้ emp รับเวร shift ในวัน day → ความยาวช่วงต่อเนื่อง (ชม.) ที่เวรนี้จะอยู่
+function continuousIfAdded(emp, day, shift) {
+  const a = (day - 1) * 1440 + (shift === 'M' ? 390 : 1110), b = a + 720;
+  const iv = shiftIntervals(emp).concat([{a, b}]).sort((x, y) => x.a - y.a);
+  let cur = null, found = 0;
+  for (const x of iv) {
+    if (cur && x.a <= cur.b) cur.b = Math.max(cur.b, x.b);
+    else { if (cur && cur.a <= a && cur.b >= b) found = cur.b - cur.a; cur = {a: x.a, b: x.b}; }
+  }
+  if (cur && cur.a <= a && cur.b >= b) found = cur.b - cur.a;
+  return found / 60;
+}
 function continuousViolations(emp) {
   const iv = shiftIntervals(emp), res = [];
   let cur = null;
-  const flush = () => { if (cur && cur.b - cur.a > 720) res.push(cur); };
+  const flush = () => { if (cur && cur.b - cur.a > MAX_CONT_MIN) res.push(cur); };
   for (const x of iv) {
     if (cur && x.a <= cur.b) { cur.b = Math.max(cur.b, x.b); cur.items.push(x); }
     else { flush(); cur = {a: x.a, b: x.b, items: [x]}; }
@@ -1753,9 +1766,9 @@ function showLeaveSubs() {
     const prev = effectiveDay(emp, day - 1), next = effectiveDay(emp, day + 1);
     const works = (e, sh) => e && e.state === 'work' && e.shifts.some(x => x.shift === sh);
     const warns = [];
-    // กฎ: ห้ามทำงานต่อเนื่องเกิน 12 ชม. → M ต่อ N / N ต่อ M ไม่ได้
-    if (shift === 'M' && works(prev, 'N')) { no.push({name, why: 'ออกเวร N ตอน 06:30 ของวันนี้ (เข้า M ต่อ = ทำงานต่อเนื่องเกิน 12 ชม.)'}); continue; }
-    if (shift === 'N' && works(next, 'M')) { no.push({name, why: 'พรุ่งนี้มีเวร M 06:30 (ออกเวร N แล้วเข้า M ต่อ = ทำงานต่อเนื่องเกิน 12 ชม.)'}); continue; }
+    // กฎ: ห้ามทำงานต่อเนื่องเกิน 18 ชม.
+    { const h = continuousIfAdded(emp, day, shift);
+      if (h > MAX_CONT_MIN / 60) { no.push({name, why: `รับเวรนี้แล้วทำงานต่อเนื่อง ${h} ชม. (ห้ามเกิน 18 ชม.)`}); continue; } }
     if (shift === 'M' && prev && prev.state === 'leave') warns.push('เมื่อวานลา ' + prev.code);
 
     const home = emp.homeUnit === unit;
@@ -1789,7 +1802,7 @@ function showLeaveSubs() {
       ${no.map(n => `<div style="padding:5px 0;border-bottom:1px solid #f8fafc;font-size:0.88rem;"><b>${n.name}</b> <span style="color:#64748b;">— ${n.why}</span></div>`).join('')}
     </details>`;
   }
-  html += `<div style="margin-top:14px;font-size:0.78rem;color:#94a3b8;line-height:1.5;">เกณฑ์: ต้องมีใบอนุญาตระบบงานนั้น · ว่าง = วันนั้นหยุดและไม่ลา · ห้ามทำงานต่อเนื่องเกิน 12 ชม. (M ต่อ N และ N ต่อ M ไม่ได้) · ห้ามทำงานติดกัน 7 วัน · เรียงตามกองประจำ → เคยเข้ากองนี้ → เวรเดือนนี้น้อยที่สุด · เป็นข้อมูลช่วยตัดสินใจ</div>`;
+  html += `<div style="margin-top:14px;font-size:0.78rem;color:#94a3b8;line-height:1.5;">เกณฑ์: ต้องมีใบอนุญาตระบบงานนั้น · ว่าง = วันนั้นหยุดและไม่ลา · ห้ามทำงานต่อเนื่องเกิน 18 ชม. (M ต่อ N / N ต่อ M เต็มกะไม่ได้) · ห้ามทำงานติดกัน 7 วัน · เรียงตามกองประจำ → เคยเข้ากองนี้ → เวรเดือนนี้น้อยที่สุด · เป็นข้อมูลช่วยตัดสินใจ</div>`;
   el.innerHTML = html;
 }
 
