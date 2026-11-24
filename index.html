@@ -359,9 +359,15 @@
   <div class="upload-section" id="uploadSection">
     <div>📂 อัปโหลดไฟล์ตารางเวร (.xlsx / .xlsm)</div>
     <div style="margin: 12px 0; display:flex; flex-wrap:wrap; gap:10px; align-items:center;">
+      <label style="font-weight:600;display:flex;align-items:center;gap:6px;">📅 ดูตารางเดือน
+        <select id="monthSelect" onchange="onMonthChange()" style="padding:8px 10px;border-radius:8px;border:1px solid #cbd5e1;font-family:inherit;font-size:0.92rem;"><option>กำลังโหลด...</option></select>
+      </label>
       <button class="upload-btn" onclick="autoLoadFromGitHub()" style="cursor:pointer;">🔄 รีโหลดจาก GitHub</button>
       <label class="upload-btn" for="fileInput" style="cursor:pointer;">📂 อัปโหลดไฟล์เอง</label>
       <input type="file" id="fileInput" accept=".xlsx">
+      <label style="font-size:0.85rem;display:flex;align-items:center;gap:4px;">เดือนของไฟล์ที่จะอัปโหลด
+        <select id="upMonth" style="padding:7px 8px;border-radius:8px;border:1px solid #cbd5e1;font-family:inherit;font-size:0.88rem;"></select>
+      </label>
       <button class="upload-btn" onclick="ghUploadGate()" style="cursor:pointer;background:#16a34a;color:#fff;" title="อัปเดตตารางให้ทุกคนเห็น (ต้องใช้รหัส)">🔒 ⬆️ อัปโหลดขึ้น GitHub</button>
       <input type="file" id="ghFileInput" accept=".xlsx" style="display:none">
       <button id="checkBtn" onclick="openCheckModal()" style="background:#0369a1;color:#fff;border:none;border-radius:10px;padding:9px 18px;font-size:0.92rem;font-family:inherit;cursor:pointer;font-weight:600;display:flex;align-items:center;gap:6px;">🔎 ตรวจสอบตารางเวร</button>
@@ -1672,20 +1678,64 @@ function showLeaveSubs() {
 // ============================================================
 // Auto-fetch schedule.xlsx from GitHub on page load
 // ============================================================
-const SCHEDULE_XLSX_URL = 'https://raw.githubusercontent.com/chaiyodpr-dev/nav-pupm-roaster/main/schedule.xlsx';
+const RAW_BASE = 'https://raw.githubusercontent.com/chaiyodpr-dev/nav-pupm-roaster/main/';
+const MONTHS_TH = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+// คีย์เดือน = "ปีพ.ศ.-เดือน" เช่น 2569-11 → ไฟล์ schedule-2569-11.xlsx (เดือน พ.ย. 2569 รองรับไฟล์เดิม schedule.xlsx ด้วย)
+function monthKey(y, m) { return y + '-' + String(m).padStart(2, '0'); }
+function monthLabel(key) { const [y, m] = key.split('-').map(Number); return MONTHS_TH[m - 1] + ' ' + y; }
+function monthPaths(key) { return ['schedule-' + key + '.xlsx'].concat(key === '2569-11' ? ['schedule.xlsx'] : []); }
+function currentMonthKey() {
+  const f = new Intl.DateTimeFormat('en-GB', {timeZone: 'Asia/Bangkok', year: 'numeric', month: 'numeric'}).formatToParts(new Date());
+  const g = t => +f.find(x => x.type === t).value;
+  return monthKey(g('year') + 543, g('month'));
+}
+let AVAILABLE_MONTHS = [];
+let CUR_MONTH_KEY = null;
 
-// แสดงวัน-เวลาที่ไฟล์ schedule.xlsx ถูกอัปเดตล่าสุดบน GitHub (เวลาไทย)
-function showScheduleUpdated() {
+function fillUpMonth() {
+  const sel = document.getElementById('upMonth'); if (!sel) return;
+  const [cy, cm] = currentMonthKey().split('-').map(Number);
+  let html = '';
+  for (let k = -1; k <= 8; k++) {
+    let m = cm + k, y = cy; while (m > 12) { m -= 12; y++; } while (m < 1) { m += 12; y--; }
+    const key = monthKey(y, m);
+    html += `<option value="${key}"${k === 0 ? ' selected' : ''}>${monthLabel(key)}</option>`;
+  }
+  sel.innerHTML = html;
+}
+
+async function loadMonthList(preferKey) {
+  let keys = [];
+  try {
+    const r = await fetch(`https://api.github.com/repos/${GH_REPO}/contents/?ref=main&t=${Date.now()}`, {headers: {'Accept': 'application/vnd.github+json'}, cache: 'no-store'});
+    if (!r.ok) throw new Error(r.status);
+    const files = (await r.json()).map(f => f.name);
+    files.forEach(n => { const m = n.match(/^schedule-(\d{4}-\d{2})\.xlsx$/); if (m) keys.push(m[1]); });
+    if (files.includes('schedule.xlsx') && !keys.includes('2569-11')) keys.push('2569-11');
+  } catch (e) { keys = ['2569-11']; }
+  if (preferKey && !keys.includes(preferKey)) keys.push(preferKey);
+  keys = [...new Set(keys)].sort();
+  AVAILABLE_MONTHS = keys;
+  const sel = document.getElementById('monthSelect');
+  sel.innerHTML = keys.map(k => `<option value="${k}">${monthLabel(k)}</option>`).join('');
+  const cur = currentMonthKey();
+  CUR_MONTH_KEY = preferKey || (keys.includes(CUR_MONTH_KEY) ? CUR_MONTH_KEY : null) || (keys.includes(cur) ? cur : keys[keys.length - 1]);
+  sel.value = CUR_MONTH_KEY;
+}
+function onMonthChange() { CUR_MONTH_KEY = document.getElementById('monthSelect').value; autoLoadFromGitHub(); }
+
+// แสดงวัน-เวลาที่ไฟล์ตารางเดือนนี้ถูกอัปเดตล่าสุดบน GitHub (เวลาไทย)
+function showScheduleUpdated(path) {
   const el = document.getElementById('scheduleUpdated');
   el.textContent = '';
-  fetch(`https://api.github.com/repos/${GH_REPO}/commits?path=${GH_PATH}&sha=main&per_page=1&t=${Date.now()}`, {headers: {'Accept': 'application/vnd.github+json'}, cache: 'no-store'})
+  fetch(`https://api.github.com/repos/${GH_REPO}/commits?path=${encodeURIComponent(path)}&sha=main&per_page=1&t=${Date.now()}`, {headers: {'Accept': 'application/vnd.github+json'}, cache: 'no-store'})
     .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
     .then(j => {
       const iso = j[0] && j[0].commit && (j[0].commit.committer || j[0].commit.author).date;
       if (!iso) return;
       const d = new Date(iso);
       const fmt = new Intl.DateTimeFormat('th-TH-u-ca-buddhist', {timeZone: 'Asia/Bangkok', day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false}).format(d);
-      el.textContent = `🕒 ตารางเวรนี้อัปเดตล่าสุดบน GitHub: ${fmt} น.`;
+      el.textContent = `🕒 ตารางเวร ${monthLabel(CUR_MONTH_KEY)} อัปเดตล่าสุดบน GitHub: ${fmt} น.`;
     })
     .catch(() => { el.textContent = ''; });
 }
@@ -1694,24 +1744,30 @@ function autoLoadFromGitHub() {
   const status = document.getElementById('uploadStatus');
   status.textContent = '⏳ กำลังโหลดตารางเวรจาก GitHub...';
   status.className = 'upload-status';
-  loadSheetJS(function() {
-    fetch(SCHEDULE_XLSX_URL + '?t=' + Date.now(), {cache: 'no-store'})  // กันแคช: ได้ไฟล์ล่าสุดเสมอ
-      .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.arrayBuffer(); })
-      .then(async buf => {
-        await parseExcel(buf, 'schedule.xlsx');
-        status.textContent = '✅ โหลดจาก GitHub สำเร็จ — กดปุ่มรีโหลดเพื่ออัปเดต';
-        status.className = 'upload-status ok';
-        showScheduleUpdated();
-      })
-      .catch(err => {
-        status.textContent = '❌ โหลดจาก GitHub ไม่ได้: ' + err.message + ' — กรุณาอัปโหลดไฟล์เอง';
-        status.className = 'upload-status error';
-      });
+  loadSheetJS(async function() {
+    try {
+      if (!AVAILABLE_MONTHS.length) await loadMonthList();
+      const key = CUR_MONTH_KEY;
+      let buf = null, used = null, lastErr = '';
+      for (const path of monthPaths(key)) {
+        const r = await fetch(RAW_BASE + encodeURI(path) + '?t=' + Date.now(), {cache: 'no-store'});  // กันแคช
+        if (r.ok) { buf = await r.arrayBuffer(); used = path; break; }
+        lastErr = 'HTTP ' + r.status;
+      }
+      if (!buf) throw new Error(lastErr === 'HTTP 404' ? 'ยังไม่มีไฟล์ตารางของ ' + monthLabel(key) : lastErr);
+      await parseExcel(buf, used);
+      status.textContent = '✅ โหลด ' + monthLabel(key) + ' จาก GitHub สำเร็จ — กดปุ่มรีโหลดเพื่ออัปเดต';
+      status.className = 'upload-status ok';
+      showScheduleUpdated(used);
+    } catch (err) {
+      status.textContent = '❌ โหลดจาก GitHub ไม่ได้: ' + err.message + ' — กรุณาอัปโหลดไฟล์เอง';
+      status.className = 'upload-status error';
+    }
   });
 }
 
 // ===== อัปโหลด schedule.xlsx ขึ้น GitHub (ผู้ดูแล) =====
-const GH_REPO = 'chaiyodpr-dev/nav-pupm-roaster', GH_PATH = 'schedule.xlsx';
+const GH_REPO = 'chaiyodpr-dev/nav-pupm-roaster';
 // รหัสเข้าปุ่มอัปโหลด (เก็บเป็น SHA-256) + Token ที่เข้ารหัสด้วยรหัสนี้ (AES-GCM/PBKDF2)
 const UP_PW_HASH = 'e4bb4404a9bedf8e6e6bf8e559cf966225ae515bebe2ad8f9fb9629a78a89c68';
 let GH_TOKEN_ENC = '64anVP1udetl/Gtvebs+N6lu+l2Q4VM0qDwkKCtzjlrRe3iE+yeCmszMCbsxTnj1nQkh/gK3CSEYGWB/8eqwN6oWUDgTM9skxIZfjXjudH3rL5avHS7HC/L5jhhSr0vKn0J1M2k1LxA5MMuA+m5Fiy5vgq5KQ/0JRbSDxjGa0VVoLG+536B1Ra4=';   // base64(salt16 + iv12 + ciphertext) — ว่าง = ให้ผู้ใช้ใส่ Token เอง
@@ -1760,20 +1816,25 @@ document.getElementById('ghFileInput').addEventListener('change', function(e) {
       const buf = evt.target.result;
       try {
         await parseExcel(buf, file.name);   // ตรวจว่าอ่านได้ก่อน และแสดงผลในหน้านี้
-        if (!confirm(`อัปโหลด "${file.name}" (${scheduleData.month_name}) ขึ้น GitHub เพื่อให้ทุกคนเห็นตารางนี้?`)) { status.textContent = 'ยกเลิกการอัปโหลดขึ้น GitHub (ยังแสดงเฉพาะในเครื่องนี้)'; return; }
+        const upKey = document.getElementById('upMonth').value;
+        const fileKey = monthKey(scheduleData.year, scheduleData.month);
+        const upPath = 'schedule-' + upKey + '.xlsx';
+        if (fileKey !== upKey && !confirm(`⚠️ ไฟล์นี้ดูเหมือนเป็นตารางของ ${scheduleData.month_name} แต่คุณเลือกอัปโหลดเป็น ${monthLabel(upKey)}\n\nกด OK ถ้ายืนยันจะอัปโหลดเป็น ${monthLabel(upKey)} / กด Cancel เพื่อกลับไปเลือกเดือนใหม่`)) { status.textContent = 'ยกเลิก — กรุณาเลือกเดือนของไฟล์ให้ตรงแล้วลองใหม่'; return; }
+        if (!confirm(`อัปโหลด "${file.name}" เป็นตารางเวร ${monthLabel(upKey)} ขึ้น GitHub เพื่อให้ทุกคนเห็น?`)) { status.textContent = 'ยกเลิกการอัปโหลดขึ้น GitHub (ยังแสดงเฉพาะในเครื่องนี้)'; return; }
         const tok = await ghToken(); if (!tok) return fail('ไม่มี Token — ยังไม่ได้อัปโหลดขึ้น GitHub');
         status.textContent = '⏳ กำลังอัปโหลดขึ้น GitHub...';
-        const api = `https://api.github.com/repos/${GH_REPO}/contents/${GH_PATH}`;
+        const api = `https://api.github.com/repos/${GH_REPO}/contents/${upPath}`;
         const H = {'Authorization': 'Bearer ' + tok, 'Accept': 'application/vnd.github+json'};
         const cur = await fetch(api + '?ref=main&t=' + Date.now(), {headers: H, cache: 'no-store'});
         let sha;
         if (cur.status === 200) sha = (await cur.json()).sha;
         else if (cur.status !== 404) throw {status: cur.status};
         const res = await fetch(api, {method: 'PUT', headers: H, body: JSON.stringify({
-          message: `Update schedule.xlsx (${scheduleData.month_name}) via web app`, content: bufToB64(buf), branch: 'main', ...(sha ? {sha} : {}) })});
+          message: `Update ${upPath} (${monthLabel(upKey)}) via web app`, content: bufToB64(buf), branch: 'main', ...(sha ? {sha} : {}) })});
         if (!res.ok) throw {status: res.status};
-        status.textContent = `✅ อัปโหลดขึ้น GitHub แล้ว (${scheduleData.month_name}) — คนอื่นจะเห็นภายใน 1–5 นาที`;
+        status.textContent = `✅ อัปโหลดขึ้น GitHub แล้ว (${monthLabel(upKey)}) — คนอื่นจะเห็นภายใน 1–5 นาที`;
         status.className = 'upload-status ok';
+        await loadMonthList(upKey); CUR_MONTH_KEY = upKey; document.getElementById('monthSelect').value = upKey; showScheduleUpdated(upPath);
       } catch (err) {
         if (err && (err.status === 401 || err.status === 403)) { try { localStorage.removeItem('navGhToken'); } catch(e) {} fail('Token ไม่ถูกต้องหรือไม่มีสิทธิ์เขียน (HTTP ' + err.status + ') — ลองกดใหม่เพื่อใส่ Token ใหม่'); }
         else if (err && err.status) fail('อัปโหลดขึ้น GitHub ไม่สำเร็จ (HTTP ' + err.status + ')');
@@ -1796,7 +1857,8 @@ function startApp() {
   document.body.classList.remove('locked');
   try { sessionStorage.setItem('navUnlocked', '1'); } catch(e) {}
   // Auto-load on page open
-  autoLoadFromGitHub();
+  fillUpMonth();
+  loadMonthList().then(autoLoadFromGitHub);
   renderTodayPanel();
 }
 document.getElementById('lockBox').addEventListener('submit', async function(ev) {
