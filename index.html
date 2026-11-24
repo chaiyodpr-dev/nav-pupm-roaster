@@ -1541,8 +1541,8 @@ function openCheckModal() {
         dupDays.map(({day, slots, dup}) => rowHtml(day, 'ซ้ำ', dup.map(k => chip(k + '×' + slots[k],'#fffbeb','#fde68a','#b45309')).join(''), slots)).join('');
     }
     if (contRows.length > 0) {
-      out += `<div style="font-weight:700;margin:14px 0 4px;color:#be123c;">พบ ${contRows.length} ช่วง ที่ปฏิบัติงานต่อเนื่องเกิน 12 ชั่วโมง</div>` +
-        contRows.map(r => `<div style="padding:5px 0;border-bottom:1px solid #f1f5f9;font-size:0.9rem;"><b>${r.name}</b> · ${r.text} <span style="color:#be123c;">(ต่อเนื่อง ${r.hours} ชม.)</span></div>`).join('');
+      out += `<div style="font-weight:700;margin:14px 0 4px;color:#be123c;">พบ ${contRows.length} ช่วง ที่ปฏิบัติงานต่อเนื่องเกิน 12 ชั่วโมง (${contRows.filter(r => r.hours > 18).length} ช่วงเกิน 18 ชั่วโมง)</div>` +
+        contRows.map(r => `<div style="padding:5px 0;border-bottom:1px solid #f1f5f9;font-size:0.9rem;"><b>${r.name}</b> · ${r.text} <span style="color:#be123c;">(ต่อเนื่อง ${r.hours} ชม.)</span>${r.hours > 18 ? ' <b style="background:#be123c;color:#fff;border-radius:5px;padding:1px 7px;font-size:0.78rem;">เกิน 18 ชม.</b>' : ''}</div>`).join('');
     }
     if (streakRows.length > 0) {
       out += `<div style="font-weight:700;margin:14px 0 4px;color:#7c3aed;">พบ ${streakRows.length} ช่วง ที่ปฏิบัติงานติดกันตั้งแต่ ${MAX_CONSEC_DAYS} วัน</div>` +
