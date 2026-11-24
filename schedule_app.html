@@ -365,9 +365,6 @@
       <button class="upload-btn" onclick="autoLoadFromGitHub()" style="cursor:pointer;">🔄 รีโหลดจาก GitHub</button>
       <label class="upload-btn" for="fileInput" style="cursor:pointer;">📂 อัปโหลดไฟล์เอง</label>
       <input type="file" id="fileInput" accept=".xlsx,.xlsm">
-      <label style="font-size:0.85rem;display:flex;align-items:center;gap:4px;">เดือนของไฟล์ที่จะอัปโหลด
-        <select id="upMonth" style="padding:7px 8px;border-radius:8px;border:1px solid #cbd5e1;font-family:inherit;font-size:0.88rem;"></select>
-      </label>
       <button class="upload-btn" onclick="ghUploadGate()" style="cursor:pointer;background:#16a34a;color:#fff;" title="อัปเดตตารางให้ทุกคนเห็น (ต้องใช้รหัส)">🔒 ⬆️ อัปโหลดขึ้น GitHub</button>
       <input type="file" id="ghFileInput" accept=".xlsx,.xlsm" style="display:none">
       <button id="checkBtn" onclick="openCheckModal()" style="background:#0369a1;color:#fff;border:none;border-radius:10px;padding:9px 18px;font-size:0.92rem;font-family:inherit;cursor:pointer;font-weight:600;display:flex;align-items:center;gap:6px;">🔎 ตรวจสอบตารางเวร</button>
@@ -1823,16 +1820,33 @@ function currentMonthKey() {
 let AVAILABLE_MONTHS = [];
 let CUR_MONTH_KEY = null;
 
-function fillUpMonth() {
-  const sel = document.getElementById('upMonth'); if (!sel) return;
-  const [cy, cm] = currentMonthKey().split('-').map(Number);
-  let html = '';
-  for (let k = -1; k <= 8; k++) {
-    let m = cm + k, y = cy; while (m > 12) { m -= 12; y++; } while (m < 1) { m += 12; y--; }
-    const key = monthKey(y, m);
-    html += `<option value="${key}"${k === 0 ? ' selected' : ''}>${monthLabel(key)}</option>`;
-  }
-  sel.innerHTML = html;
+// หลังเลือกไฟล์แล้ว ค่อยถามว่าเป็นตารางของเดือน/ปีไหน (ค่าเริ่มต้น = เดือนที่อ่านได้จากไฟล์) → คืน key หรือ null ถ้ายกเลิก
+function pickUploadMonth(defKey, fileName) {
+  return new Promise(resolve => {
+    const [cy, cm] = currentMonthKey().split('-').map(Number);
+    const keys = [];
+    for (let k = -1; k <= 8; k++) {
+      let m = cm + k, y = cy; while (m > 12) { m -= 12; y++; } while (m < 1) { m += 12; y--; }
+      keys.push(monthKey(y, m));
+    }
+    if (defKey && !keys.includes(defKey)) keys.push(defKey);
+    keys.sort();
+    const sel0 = defKey || currentMonthKey();
+    const ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:1200;display:flex;align-items:center;justify-content:center;padding:20px;';
+    ov.innerHTML = `<div style="background:#fff;border-radius:16px;max-width:420px;width:100%;padding:22px;box-shadow:0 8px 32px rgba(0,0,0,0.2);">
+      <div style="font-weight:700;color:#0369a1;font-size:1.05rem;margin-bottom:6px;">📅 ไฟล์นี้เป็นตารางเวรของเดือนไหน?</div>
+      <div style="font-size:0.85rem;color:#64748b;margin-bottom:12px;word-break:break-all;">${fileName}</div>
+      <select id="_pickM" style="width:100%;padding:10px;border-radius:8px;border:1px solid #cbd5e1;font-family:inherit;font-size:1rem;">${keys.map(k => `<option value="${k}"${k === sel0 ? ' selected' : ''}>${monthLabel(k)}${k === defKey ? ' (ตรงกับที่อ่านได้จากไฟล์)' : ''}</option>`).join('')}</select>
+      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px;">
+        <button id="_pickC" style="padding:9px 16px;border-radius:10px;border:1px solid #cbd5e1;background:#fff;font-family:inherit;cursor:pointer;">ยกเลิก</button>
+        <button id="_pickO" style="padding:9px 16px;border-radius:10px;border:none;background:#16a34a;color:#fff;font-family:inherit;font-weight:600;cursor:pointer;">ตกลง</button>
+      </div></div>`;
+    document.body.appendChild(ov);
+    const done = v => { ov.remove(); resolve(v); };
+    ov.querySelector('#_pickC').onclick = () => done(null);
+    ov.querySelector('#_pickO').onclick = () => done(ov.querySelector('#_pickM').value);
+  });
 }
 
 async function loadMonthList(preferKey) {
@@ -1947,8 +1961,9 @@ document.getElementById('ghFileInput').addEventListener('change', function(e) {
       const buf = evt.target.result;
       try {
         await parseExcel(buf, file.name);   // ตรวจว่าอ่านได้ก่อน และแสดงผลในหน้านี้
-        const upKey = document.getElementById('upMonth').value;
         const fileKey = monthKey(scheduleData.year, scheduleData.month);
+        const upKey = await pickUploadMonth(fileKey, file.name);
+        if (!upKey) { status.textContent = 'ยกเลิกการอัปโหลดขึ้น GitHub (ยังแสดงเฉพาะในเครื่องนี้)'; return; }
         const upExt = /\.xlsm$/i.test(file.name) ? 'xlsm' : 'xlsx';
         const upPath = 'schedule-' + upKey + '.' + upExt;
         const siblings = monthPaths(upKey).filter(x => x !== upPath);
@@ -1998,7 +2013,6 @@ function startApp() {
   document.body.classList.remove('locked');
   try { sessionStorage.setItem('navUnlocked', '1'); } catch(e) {}
   // Auto-load on page open
-  fillUpMonth();
   loadMonthList().then(autoLoadFromGitHub);
   renderTodayPanel();
 }
