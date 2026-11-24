@@ -1252,14 +1252,18 @@ async function parseExcel(arrayBuffer, filename) {
     }
     // แถว "ตำแหน่งว่าง" → เก็บไว้ใช้อธิบายเหตุผลการแทนเวร (ไม่นับเป็นพนักงาน)
     if (typeof nameCell === 'string' && nameCell.includes('ตำแหน่งว่าง') && Object.keys(dayColMap).length > 0) {
-      const vr1 = {}, vr2 = {};
+      const vr1 = {}, vr2 = {}, vr4 = {};
+      const vc2 = (data[ri+2] || [])[NAME_COL], vc3 = (data[ri+3] || [])[NAME_COL];
+      const vHas4 = (vc2 == null || String(vc2).trim() === '') && typeof vc3 === 'string' && /^W\d?$/i.test(vc3.trim());
       for (const [day, ci] of Object.entries(dayColMap)) {
         vr1[day] = row[ci] != null ? String(row[ci]).trim() : '';
         const r2v = (data[ri+1] || [])[ci];
         vr2[day] = r2v != null ? String(r2v).trim() : '';
+        const r4v = vHas4 ? (data[ri+3] || [])[ci] : null;
+        vr4[day] = r4v != null ? String(r4v).trim() : '';
       }
-      vacancies.push({unit: blockUnit, name: nameCell.trim(), r1: vr1, r2: vr2});
-      ri += 3;
+      vacancies.push({unit: blockUnit, name: nameCell.trim(), r1: vr1, r2: vr2, r4: vr4});
+      ri += vHas4 ? 4 : 3;
       continue;
     }
     if (isEmployeeRow(nameCell) && Object.keys(dayColMap).length > 0) {
@@ -1273,7 +1277,8 @@ async function parseExcel(arrayBuffer, filename) {
       const r3row = data[ri + (has4 ? 3 : 2)] || []; // หมายเหตุ/ชื่อย่อ (col1 = รหัสย่อ → ข้ามไป)
 
       // Build color override from r3 row (หมายเหตุ row มีสีบอกสถานะ)
-      const colorOvr = buildColorOverride(ri + (has4 ? 3 : 2), dayColMap); // r3 row (0-based → addr uses +1)
+      // กฎใหม่ (ไฟล์ 4 แถว ธ.ค. 69+): ไม่อ่านสีเซลล์อีกต่อไป — ใช้เฉพาะข้อความ MRN/ORN ; ไฟล์ 3 แถวเดิมยังอ่านสีเพื่อให้เดือนเก่าแสดงถูก
+      const colorOvr = has4 ? {} : buildColorOverride(ri + (has4 ? 3 : 2), dayColMap);
 
       const schedule = {};
       for (const [day, ci] of Object.entries(dayColMap)) {
@@ -1324,11 +1329,16 @@ async function parseExcel(arrayBuffer, filename) {
           }
         }
 
-        // แถวลา (เค้าโครง 4 แถว): nVL / eVL = ลา VL ฯลฯ  (รหัสอื่น เช่น nZ เก็บเป็นหมายเหตุ ไม่ถือเป็นลา)
+        // แถวลา (เค้าโครง 4 แถว): nVL / eVL = ลาในช่วงปฏิบัติงานของกองนั้น (n=วช. e=วฟ. c=วส.)
+        //   nZ / eZ = รับรองเวลาปฏิบัติงานเวรหลักโดยไม่ต้องทำงาน → ถือเป็น D (08:00-17:00)
+        //   ถ้าแถว 2 มีข้อมูลของวันนั้น (เวรแทน/ครึ่งกะ/D/ลา) → แถว 2 ชนะแถวลาเสมอ
         let leaveZ = null;
-        if (vL) {
-          const lm = vL.toUpperCase().match(/(VL|VC|PL|SL)/);
-          if (lm) update = { type: 'leave', code: lm[1] };
+        const row2Has = !!update || (mainDecoded && mainDecoded.type === 'day' && dayDec && dayDec.type === 'day');
+        if (vL && !row2Has) {
+          const vLu = vL.toUpperCase();
+          const lm = vLu.match(/^([NEC])?\s*(VL|VC|PL|SL)/);
+          if (lm) update = { type: 'leave', code: lm[2], leaveUnit: lm[1] ? UNIT_MAP[lm[1].toLowerCase()] : null };
+          else if (/Z/.test(vLu)) { main = 'D'; mainDecoded = { type: 'day', shift: 'D', unit: '', time: '08:00-17:00', raw: vL, fromZ: true }; }
           else leaveZ = vL;
         }
 
@@ -1359,7 +1369,7 @@ async function parseExcel(arrayBuffer, filename) {
             const s = emp.schedule[dStr];
             if (!s || !s.update || s.update.type !== 'leave') continue;
             const md = s.mainDecoded;
-            if (md && md.type === 'work' && md.shift === sh && md.unit === unit) {
+            if (md && md.type === 'work' && md.shift === sh && (s.update.leaveUnit || md.unit) === unit) {
               needs.push({reason: 'leave', leaveOf: shortName(emp.name), leaveCode: s.update.code});
             }
           }
@@ -1367,8 +1377,9 @@ async function parseExcel(arrayBuffer, filename) {
             if (v.unit !== unit) continue;
             const r1 = (v.r1[dStr] || '').toUpperCase();
             if (r1.charAt(0) === sh) {
-              const ab = v.r2[dStr] || '';
-              needs.push({reason: 'vacancy', abbr: knownAbbr.has(ab) ? ab : ''});
+              const toAbbr = t => { t = (t || '').replace(/\s+/g, ' ').trim(); if (!t) return ''; if (knownAbbr.has(t)) return t;
+                const e2 = employees.find(x => shortName(x.name) === t); return e2 ? e2.abbr : ''; };
+              needs.push({reason: 'vacancy', abbr: toAbbr(v.r2[dStr]) || toAbbr(v.r4 && v.r4[dStr])});
             }
           }
           // คนที่ไปแทน (เวรแทนเต็ม หรือ เวรครึ่งกะ — ครึ่งกะทั้งคู่นับเป็นการแทน 1 เวร)
@@ -1518,7 +1529,9 @@ function openCheckModal() {
         <span style="margin-left:auto;">${slotText(slots)}</span>
       </div>`;
 
-  if (missing.length === 0 && dupDays.length === 0) {
+  const streakRows = [];
+  for (const emp of scheduleData.employees) for (const st of workStreaks(emp)) if (st.len >= MAX_CONSEC_DAYS) streakRows.push({name: emp.name, ...st});
+  if (missing.length === 0 && dupDays.length === 0 && streakRows.length === 0) {
     el.innerHTML = dataSource + `<div style="color:#16a34a;font-weight:700;font-size:1rem;text-align:center;padding:20px;">✅ ครบทุกเวรทุกวัน ไม่มีวันที่ขาดหรือซ้ำ!</div>`;
   } else {
     let out = dataSource + `<div style="font-size:0.82rem;color:#64748b;margin-bottom:10px;">เวรที่ตรวจ: Mn (เช้า วช.), Me (เช้า วฟ.), Nn (ดึก วช.), Ne (ดึก วฟ.)</div>`;
@@ -1529,6 +1542,10 @@ function openCheckModal() {
     if (dupDays.length > 0) {
       out += `<div style="font-weight:700;margin:14px 0 4px;color:#b45309;">พบ ${dupDays.length} วัน ที่มีเวรซ้ำ (มีคนเกิน 1 คน)</div>` +
         dupDays.map(({day, slots, dup}) => rowHtml(day, 'ซ้ำ', dup.map(k => chip(k + '×' + slots[k],'#fffbeb','#fde68a','#b45309')).join(''), slots)).join('');
+    }
+    if (streakRows.length > 0) {
+      out += `<div style="font-weight:700;margin:14px 0 4px;color:#7c3aed;">พบ ${streakRows.length} ช่วง ที่ปฏิบัติงานติดกันตั้งแต่ ${MAX_CONSEC_DAYS} วัน</div>` +
+        streakRows.map(r => `<div style="padding:5px 0;border-bottom:1px solid #f1f5f9;font-size:0.9rem;"><b>${r.name}</b> · วันที่ ${r.start}–${r.end} (${r.len} วันติด)</div>`).join('');
     }
     el.innerHTML = out;
   }
@@ -1622,6 +1639,19 @@ function downloadIcs(mode, cancel) {
   setTimeout(() => URL.revokeObjectURL(a.href), 2000);
 }
 
+// กฎ: ห้ามปฏิบัติงานต่อเนื่องกันถึง 7 วัน (นับ M/N/ครึ่งกะ/D เป็นวันปฏิบัติงาน; ลา/หยุด ตัดช่วง)
+const MAX_CONSEC_DAYS = 7;
+function isWorkingDay(emp, d) { const e = effectiveDay(emp, d); return !!e && (e.state === 'work' || e.state === 'day'); }
+function workStreaks(emp) {
+  const out = []; let start = null;
+  for (let d = 1; d <= scheduleData.max_day + 1; d++) {
+    const w = d <= scheduleData.max_day && isWorkingDay(emp, d);
+    if (w && start === null) start = d;
+    if (!w && start !== null) { out.push({start, end: d - 1, len: d - start}); start = null; }
+  }
+  return out;
+}
+
 // ใบอนุญาตปฏิบัติงานแต่ละระบบงาน (ชื่อย่อจากแถวที่ 3 ของแต่ละคน)
 // ยืนยันโดยผู้ใช้ พ.ย. 2569 — วช.=n, วส.=c, วฟ.=e
 const LICENSES = {
@@ -1681,6 +1711,12 @@ function showLeaveSubs() {
       continue;
     }
 
+    // กฎ: ห้ามปฏิบัติงานต่อเนื่องกัน 7 วัน → ถ้ารับเวรนี้แล้วติดกันครบ 7 วันขึ้นไป แทนไม่ได้
+    { let a = 0, b = 0;
+      while (day - 1 - a >= 1 && isWorkingDay(emp, day - 1 - a)) a++;
+      while (day + 1 + b <= maxDay && isWorkingDay(emp, day + 1 + b)) b++;
+      if (a + 1 + b >= MAX_CONSEC_DAYS) { no.push({name, why: `รับเวรนี้แล้วทำงานติดกัน ${a + 1 + b} วัน (ห้ามเกิน ${MAX_CONSEC_DAYS - 1} วัน ติดกัน)`}); continue; } }
+
     // หยุดอยู่ → ตรวจเวรติดกัน (ไม่มีเวลาพัก)
     const prev = effectiveDay(emp, day - 1), next = effectiveDay(emp, day + 1);
     const works = (e, sh) => e && e.state === 'work' && e.shifts.some(x => x.shift === sh);
@@ -1721,7 +1757,7 @@ function showLeaveSubs() {
       ${no.map(n => `<div style="padding:5px 0;border-bottom:1px solid #f8fafc;font-size:0.88rem;"><b>${n.name}</b> <span style="color:#64748b;">— ${n.why}</span></div>`).join('')}
     </details>`;
   }
-  html += `<div style="margin-top:14px;font-size:0.78rem;color:#94a3b8;line-height:1.5;">เกณฑ์: ต้องมีใบอนุญาตระบบงานนั้น · ว่าง = วันนั้นหยุดและไม่ลา · ห้ามทำงานต่อเนื่องเกิน 12 ชม. (M ต่อ N และ N ต่อ M ไม่ได้) · เรียงตามกองประจำ → เคยเข้ากองนี้ → เวรเดือนนี้น้อยที่สุด · เป็นข้อมูลช่วยตัดสินใจ</div>`;
+  html += `<div style="margin-top:14px;font-size:0.78rem;color:#94a3b8;line-height:1.5;">เกณฑ์: ต้องมีใบอนุญาตระบบงานนั้น · ว่าง = วันนั้นหยุดและไม่ลา · ห้ามทำงานต่อเนื่องเกิน 12 ชม. (M ต่อ N และ N ต่อ M ไม่ได้) · ห้ามทำงานติดกัน 7 วัน · เรียงตามกองประจำ → เคยเข้ากองนี้ → เวรเดือนนี้น้อยที่สุด · เป็นข้อมูลช่วยตัดสินใจ</div>`;
   el.innerHTML = html;
 }
 
