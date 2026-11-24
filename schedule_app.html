@@ -1252,17 +1252,14 @@ async function parseExcel(arrayBuffer, filename) {
     }
     // แถว "ตำแหน่งว่าง" → เก็บไว้ใช้อธิบายเหตุผลการแทนเวร (ไม่นับเป็นพนักงาน)
     if (typeof nameCell === 'string' && nameCell.includes('ตำแหน่งว่าง') && Object.keys(dayColMap).length > 0) {
-      const vr1 = {}, vr2 = {}, vr4 = {};
+      // กฎใหม่ (24 พ.ย. 2569): ตำแหน่งว่าง สนใจเฉพาะ "แถวที่ 1" (เวรหลักที่ว่าง) — ไม่อ่านแถวอื่นของบล็อกเลย
+      const vr1 = {};
       const vc2 = (data[ri+2] || [])[NAME_COL], vc3 = (data[ri+3] || [])[NAME_COL];
       const vHas4 = (vc2 == null || String(vc2).trim() === '') && typeof vc3 === 'string' && /^W\d?$/i.test(vc3.trim());
       for (const [day, ci] of Object.entries(dayColMap)) {
         vr1[day] = row[ci] != null ? String(row[ci]).trim() : '';
-        const r2v = (data[ri+1] || [])[ci];
-        vr2[day] = r2v != null ? String(r2v).trim() : '';
-        const r4v = vHas4 ? (data[ri+3] || [])[ci] : null;
-        vr4[day] = r4v != null ? String(r4v).trim() : '';
       }
-      vacancies.push({unit: blockUnit, name: nameCell.trim(), r1: vr1, r2: vr2, r4: vr4});
+      vacancies.push({unit: blockUnit, name: nameCell.trim(), r1: vr1});
       ri += vHas4 ? 4 : 3;
       continue;
     }
@@ -1377,9 +1374,7 @@ async function parseExcel(arrayBuffer, filename) {
             if (v.unit !== unit) continue;
             const r1 = (v.r1[dStr] || '').toUpperCase();
             if (r1.charAt(0) === sh) {
-              const toAbbr = t => { t = (t || '').replace(/\s+/g, ' ').trim(); if (!t) return ''; if (knownAbbr.has(t)) return t;
-                const e2 = employees.find(x => shortName(x.name) === t); return e2 ? e2.abbr : ''; };
-              needs.push({reason: 'vacancy', abbr: toAbbr(v.r2[dStr]) || toAbbr(v.r4 && v.r4[dStr])});
+              needs.push({reason: 'vacancy', abbr: ''});
             }
           }
           // คนที่ไปแทน (เวรแทนเต็ม หรือ เวรครึ่งกะ — ครึ่งกะทั้งคู่นับเป็นการแทน 1 เวร)
