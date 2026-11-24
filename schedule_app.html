@@ -529,6 +529,7 @@ function getShiftCellLabel(decoded, raw) {
     return decoded.shift;
   }
   if (decoded.type === 'leave') return `O(${decoded.code})`;
+  if (decoded.type === 'day') return 'D';
   if (decoded.type === 'off') {
     if (decoded.unit === 'วฟ.') return 'Oe';
     if (decoded.unit === 'กระบี่') return 'Ok';
@@ -550,6 +551,7 @@ function getShiftFullLabel(decoded, raw) {
     return `${shortCode} ${shiftWord} ${u}`;
   }
   if (decoded.type === 'leave') return `หยุด ลา (${decoded.code})`;
+  if (decoded.type === 'day') return 'D ทำงานเวลาปกติ (08:00–17:00)';
   if (decoded.type === 'off' && decoded.unit) return `O หยุด (${decoded.unit})`;
   if (decoded.type === 'off' && decoded.location) return `OFF (${decoded.location})`;
   return raw || 'O';
@@ -635,7 +637,7 @@ function renderTodayPanel() {
   // mWorkers/nWorkers = คนที่ปรากฏจริงในกะ (หลังอัพเดทแล้ว)
   // คนลา → ไม่แสดงในกะ (ถูกแทนโดยคนอื่น)
   // คนแทน → แสดงด้วยเวรแทน + หมายเหตุ
-  const mWorkers = [], nWorkers = [];
+  const mWorkers = [], nWorkers = [], dWorkers = [];
 
   for (const emp of scheduleData.employees) {
     const s = emp.schedule[String(dayNum)];
@@ -672,6 +674,8 @@ function renderTodayPanel() {
       if (h.shift === 'M') mWorkers.push(hw);
       else if (h.shift === 'N') nWorkers.push(hw);
     }
+
+    if (dec && dec.type === 'day') { dWorkers.push({name: emp.name, tagCls: 'tag-O', fullLbl: getShiftFullLabel(dec, 'D'), subNote: null, origFullLbl: null, rawStr}); continue; }
 
     // ปกติ ไม่มีอัพเดท
     if (!dec || dec.type !== 'work') continue;
@@ -717,6 +721,11 @@ function renderTodayPanel() {
   for (const w of nWorkers) html += renderWorkerRow(w);
   html += `</div>`;
 
+  if (dWorkers.length) {
+    html += `<div class="shift-section"><h3><span class="shift-badge" style="background:#e5e7eb;color:#374151">D</span> เวลาทำงานปกติ (08:00–17:00)</h3>`;
+    for (const w of dWorkers) html += renderWorkerRow(w);
+    html += `</div>`;
+  }
   document.getElementById('todayContent').innerHTML = html;
 }
 
@@ -847,7 +856,7 @@ function showPersonSchedule() {
 
   // Summary table
   html += `<div class="shift-section"><h3>สรุปเดือน</h3>`;
-  let mCount = 0, nCount = 0, oCount = 0, leaveCount = 0, subCount = 0, halfCount = 0;
+  let mCount = 0, nCount = 0, oCount = 0, leaveCount = 0, subCount = 0, halfCount = 0, dCount = 0;
   for (let d = 1; d <= maxDay; d++) {
     const s = emp.schedule[String(d)];
     if (!s) continue;
@@ -872,11 +881,13 @@ function showPersonSchedule() {
       if (dec.shift === 'M') mCount++;
       else if (dec.shift === 'N') nCount++;
       else oCount++;
-    } else oCount++;
+    } else if (dec && dec.type === 'day') dCount++;
+    else oCount++;
   }
   html += `<div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:8px;">
     <div class="tag tag-M">M: ${mCount} วัน</div>
     <div class="tag tag-N">N: ${nCount} วัน</div>
+    ${dCount ? `<div class="tag" style="background:#e5e7eb;color:#374151">D: ${dCount} วัน</div>` : ''}
     <div class="tag" style="background:var(--O-bg);color:var(--O)">O: ${oCount} วัน</div>
     ${leaveCount > 0 ? `<div class="tag" style="background:#fef3c7;color:#92400e">ลา: ${leaveCount} วัน</div>` : ''}
     ${subCount > 0 ? `<div class="tag tag-repl">แทนเวร: ${subCount} วัน</div>` : ''}
@@ -1163,6 +1174,9 @@ async function parseExcel(arrayBuffer, filename) {
     if (!s) return null;
     const up = s.toUpperCase();
 
+    // D / DW = ปฏิบัติงานเวลาทำงานปกติ 08:00-17:00
+    if (up === 'D' || up === 'DW') return { type: 'day', shift: 'D', unit: '', time: '08:00-17:00', raw: s };
+
     // Leave codes
     for (const lc of LEAVE_CODES) {
       if (up === lc || up.startsWith(lc)) return { type: 'leave', code: lc };
@@ -1252,10 +1266,14 @@ async function parseExcel(arrayBuffer, filename) {
       let name = nameCell.trim().replace(/^[๐-๙\d]+\.\s*/, '').replace(/\s+/g,' ').trim();
       const r1row = data[ri]   || []; // เวรหลัก
       const r2row = data[ri+1] || []; // อัปเดต (แต่ col1 = employee ID → ข้ามไป)
-      const r3row = data[ri+2] || []; // หมายเหตุ (col1 = รหัสย่อ → ข้ามไป)
+      // เค้าโครง 4 แถว (ไฟล์ ธ.ค. 69+): มีแถว "ลา" คั่นระหว่างแถวรหัสพนักงานกับแถวชื่อย่อ
+      const _c2 = (data[ri+2] || [])[NAME_COL], _c3 = (data[ri+3] || [])[NAME_COL];
+      const has4 = (_c2 == null || String(_c2).trim() === '') && typeof _c3 === 'string' && /^[A-Za-z]{2,4}$/.test(_c3.trim());
+      const leaveRow = has4 ? (data[ri+2] || []) : null;
+      const r3row = data[ri + (has4 ? 3 : 2)] || []; // หมายเหตุ/ชื่อย่อ (col1 = รหัสย่อ → ข้ามไป)
 
       // Build color override from r3 row (หมายเหตุ row มีสีบอกสถานะ)
-      const colorOvr = buildColorOverride(ri + 2, dayColMap); // ri+2 = r3 row (0-based → addr uses ri+3)
+      const colorOvr = buildColorOverride(ri + (has4 ? 3 : 2), dayColMap); // r3 row (0-based → addr uses +1)
 
       const schedule = {};
       for (const [day, ci] of Object.entries(dayColMap)) {
@@ -1264,6 +1282,7 @@ async function parseExcel(arrayBuffer, filename) {
         const v2 = r2row[ci] != null ? String(r2row[ci]).trim() : '';
         const v3 = r3row[ci] != null ? String(r3row[ci]).trim() : '';
         const v3up = v3.toUpperCase();
+        const vL = leaveRow && leaveRow[ci] != null ? String(leaveRow[ci]).trim() : '';
 
         // แถว3: ข้อความ MRN/ORN ตรงๆ ก่อน
         let main = v1 || 'O';
@@ -1280,12 +1299,16 @@ async function parseExcel(arrayBuffer, filename) {
           }
         }
 
-        const mainDecoded = decodeShift(main, unitOverride);
+        let mainDecoded = decodeShift(main, unitOverride);
         if (unitOverride && mainDecoded && mainDecoded.type === 'off') mainDecoded.unit = unitOverride;
 
         // แถว2: อัปเดต — เช็ค leave, half-shift หรือ แทนเวร
         let update = null;
-        if (v2) {
+        const dayDec = (v2 && !isEmployeeId(r2row[ci])) ? decodeShift(v2) : null;
+        if (dayDec && dayDec.type === 'day') {
+          // D = ทำงานเวลาปกติ 08:00-17:00 แทนเวรหลักของวันนั้น
+          main = 'D'; mainDecoded = dayDec;
+        } else if (v2) {
           const up2 = v2.toUpperCase();
           // leave codes
           const lc = LEAVE_CODES.find(l => up2 === l || up2.startsWith(l));
@@ -1301,15 +1324,23 @@ async function parseExcel(arrayBuffer, filename) {
           }
         }
 
+        // แถวลา (เค้าโครง 4 แถว): nVL / eVL = ลา VL ฯลฯ  (รหัสอื่น เช่น nZ เก็บเป็นหมายเหตุ ไม่ถือเป็นลา)
+        let leaveZ = null;
+        if (vL) {
+          const lm = vL.toUpperCase().match(/(VL|VC|PL|SL)/);
+          if (lm) update = { type: 'leave', code: lm[1] };
+          else leaveZ = vL;
+        }
+
         // หมายเหตุ (v3) ที่ไม่ใช่ MRN/ORN
-        let note = null;
-        if (v3 && v3up !== 'MRN' && v3up !== 'ORN') note = v3;
+        let note = leaveZ;
+        if (v3 && v3up !== 'MRN' && v3up !== 'ORN') note = note ? note + ' / ' + v3 : v3;
 
         schedule[d] = { main, mainDecoded, update, note, unitOverride, raw: {r1: v1, r2: v2, r3: v3} };
       }
       const abbr = (r3row[NAME_COL] != null ? String(r3row[NAME_COL]).trim() : '');
       employees.push({ name, abbr, homeUnit: blockUnit, schedule });
-      ri += 3;
+      ri += has4 ? 4 : 3;
     } else {
       ri++;
     }
@@ -1513,6 +1544,7 @@ function effectiveDay(emp, d) {
   if (!s) return null;
   const u = s.update;
   if (u && u.type === 'leave') return {state: 'leave', code: u.code, shifts: []};
+  if (s.mainDecoded && s.mainDecoded.type === 'day') return {state: 'day', shifts: []};
   const shifts = [];
   if (u && u.type === 'sub') shifts.push({shift: u.shift, unit: u.unit, label: u.raw});
   else {
@@ -1535,6 +1567,13 @@ function buildIcsEvents(emp, withName, cancel) {
   const out = [];
   for (let d = 1; d <= scheduleData.max_day; d++) {
     const e = effectiveDay(emp, d);
+    if (e && e.state === 'day') {
+      out.push(['BEGIN:VEVENT', `UID:${yr}${p2(mo)}${p2(d)}-${emp.abbr}-D@nav-roster`, `DTSTAMP:${yr}${p2(mo)}01T000000Z`,
+        `DTSTART;TZID=Asia/Bangkok:${stamp(d, '08:00')}`, `DTEND;TZID=Asia/Bangkok:${stamp(d, '17:00')}`,
+        `SUMMARY:${withName ? '[' + emp.abbr + '] ' : ''}D เวลาทำงานปกติ`, `DESCRIPTION:${esc(emp.name + ' — ทำงานเวลาปกติ 08:00-17:00')}`, 'COLOR:gray',
+        ...(cancel ? ['STATUS:CANCELLED', 'SEQUENCE:1'] : []), 'END:VEVENT'].join('\r\n'));
+      continue;
+    }
     if (!e || e.state !== 'work') continue;
     e.shifts.forEach(sh => {
       let a, b, extra = '';
@@ -1636,6 +1675,7 @@ function showLeaveSubs() {
     // ใบอนุญาต: ต้องมีใบอนุญาตของระบบงานนั้น
     if (!(LICENSES[unit] || []).includes(emp.abbr)) { no.push({name, why: `ไม่มีใบอนุญาต ${unit}`}); continue; }
     if (cur.state === 'leave') { no.push({name, why: `ลาอยู่แล้ว (${cur.code})`}); continue; }
+    if (cur.state === 'day') { no.push({name, why: 'ปฏิบัติงานเวลาปกติ D (08:00–17:00)'}); continue; }
     if (cur.state === 'work') {
       no.push({name, why: 'ติดเวร ' + cur.shifts.map(x => `${x.label} (${x.shift} ${x.unit})`).join(' + ')});
       continue;
