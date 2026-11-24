@@ -364,12 +364,12 @@
       </label>
       <button class="upload-btn" onclick="autoLoadFromGitHub()" style="cursor:pointer;">🔄 รีโหลดจาก GitHub</button>
       <label class="upload-btn" for="fileInput" style="cursor:pointer;">📂 อัปโหลดไฟล์เอง</label>
-      <input type="file" id="fileInput" accept=".xlsx">
+      <input type="file" id="fileInput" accept=".xlsx,.xlsm">
       <label style="font-size:0.85rem;display:flex;align-items:center;gap:4px;">เดือนของไฟล์ที่จะอัปโหลด
         <select id="upMonth" style="padding:7px 8px;border-radius:8px;border:1px solid #cbd5e1;font-family:inherit;font-size:0.88rem;"></select>
       </label>
       <button class="upload-btn" onclick="ghUploadGate()" style="cursor:pointer;background:#16a34a;color:#fff;" title="อัปเดตตารางให้ทุกคนเห็น (ต้องใช้รหัส)">🔒 ⬆️ อัปโหลดขึ้น GitHub</button>
-      <input type="file" id="ghFileInput" accept=".xlsx" style="display:none">
+      <input type="file" id="ghFileInput" accept=".xlsx,.xlsm" style="display:none">
       <button id="checkBtn" onclick="openCheckModal()" style="background:#0369a1;color:#fff;border:none;border-radius:10px;padding:9px 18px;font-size:0.92rem;font-family:inherit;cursor:pointer;font-weight:600;display:flex;align-items:center;gap:6px;">🔎 ตรวจสอบตารางเวร</button>
       <button id="leaveBtn" onclick="openLeaveModal()" style="background:#ea580c;color:#fff;border:none;border-radius:10px;padding:9px 18px;font-size:0.92rem;font-family:inherit;cursor:pointer;font-weight:600;display:flex;align-items:center;gap:6px;">🙋 ลา — ใครแทนได้</button>
     </div>
@@ -907,8 +907,8 @@ function loadSheetJS(callback) {
 document.getElementById('fileInput').addEventListener('change', function(e) {
   const file = e.target.files[0];
   if (!file) return;
-  if (!file.name.toLowerCase().endsWith('.xlsx')) {
-    document.getElementById('uploadStatus').textContent = '❌ รองรับเฉพาะไฟล์ .xlsx เท่านั้น (ไม่รับ .xlsm)';
+  if (!/\.(xlsx|xlsm)$/i.test(file.name)) {
+    document.getElementById('uploadStatus').textContent = '❌ รองรับเฉพาะไฟล์ .xlsx และ .xlsm เท่านั้น';
     document.getElementById('uploadStatus').className = 'upload-status error';
     document.getElementById('fileInput').value = '';
     return;
@@ -988,7 +988,17 @@ async function parseExcel(arrayBuffer, filename) {
       const getNs = (root) => root.documentElement.namespaceURI || 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
 
       const stylesEntry = zip.file('xl/styles.xml');
-      const sheetEntry = zip.file('xl/worksheets/sheet1.xml');
+      // หาไฟล์ชีตจริงของ wsName (ไฟล์ .xlsm/ไฟล์หลายชีตอาจไม่ใช่ sheet1.xml)
+      let sheetPath = 'xl/worksheets/sheet1.xml';
+      try {
+        const wbDoc = parseXml(await zip.file('xl/workbook.xml').async('string'));
+        const relDoc = parseXml(await zip.file('xl/_rels/workbook.xml.rels').async('string'));
+        const shEl = [...wbDoc.getElementsByTagName('sheet')].find(e => (e.getAttribute('name') || '').trim() === wsName.trim());
+        const rid = shEl && (shEl.getAttribute('r:id') || shEl.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships', 'id'));
+        const rel = rid && [...relDoc.getElementsByTagName('Relationship')].find(e => e.getAttribute('Id') === rid);
+        if (rel) { let t = rel.getAttribute('Target'); t = t.startsWith('/') ? t.slice(1) : 'xl/' + t; if (zip.file(t)) sheetPath = t; }
+      } catch (e) {}
+      const sheetEntry = zip.file(sheetPath);
 
       if (stylesEntry && sheetEntry) {
         const stylesStr = await stylesEntry.async('string');
@@ -1683,7 +1693,7 @@ const MONTHS_TH = ['มกราคม','กุมภาพันธ์','มี
 // คีย์เดือน = "ปีพ.ศ.-เดือน" เช่น 2569-11 → ไฟล์ schedule-2569-11.xlsx (เดือน พ.ย. 2569 รองรับไฟล์เดิม schedule.xlsx ด้วย)
 function monthKey(y, m) { return y + '-' + String(m).padStart(2, '0'); }
 function monthLabel(key) { const [y, m] = key.split('-').map(Number); return MONTHS_TH[m - 1] + ' ' + y; }
-function monthPaths(key) { return ['schedule-' + key + '.xlsx'].concat(key === '2569-11' ? ['schedule.xlsx'] : []); }
+function monthPaths(key) { return ['schedule-' + key + '.xlsx', 'schedule-' + key + '.xlsm'].concat(key === '2569-11' ? ['schedule.xlsx'] : []); }
 function currentMonthKey() {
   const f = new Intl.DateTimeFormat('en-GB', {timeZone: 'Asia/Bangkok', year: 'numeric', month: 'numeric'}).formatToParts(new Date());
   const g = t => +f.find(x => x.type === t).value;
@@ -1710,7 +1720,7 @@ async function loadMonthList(preferKey) {
     const r = await fetch(`https://api.github.com/repos/${GH_REPO}/contents/?ref=main&t=${Date.now()}`, {headers: {'Accept': 'application/vnd.github+json'}, cache: 'no-store'});
     if (!r.ok) throw new Error(r.status);
     const files = (await r.json()).map(f => f.name);
-    files.forEach(n => { const m = n.match(/^schedule-(\d{4}-\d{2})\.xlsx$/); if (m) keys.push(m[1]); });
+    files.forEach(n => { const m = n.match(/^schedule-(\d{4}-\d{2})\.xls[xm]$/); if (m) keys.push(m[1]); });
     if (files.includes('schedule.xlsx') && !keys.includes('2569-11')) keys.push('2569-11');
   } catch (e) { keys = ['2569-11']; }
   if (preferKey && !keys.includes(preferKey)) keys.push(preferKey);
@@ -1808,7 +1818,7 @@ document.getElementById('ghFileInput').addEventListener('change', function(e) {
   if (!file) return;
   const status = document.getElementById('uploadStatus');
   const fail = m => { status.textContent = '❌ ' + m; status.className = 'upload-status error'; };
-  if (!file.name.toLowerCase().endsWith('.xlsx')) return fail('รองรับเฉพาะไฟล์ .xlsx');
+  if (!/\.(xlsx|xlsm)$/i.test(file.name)) return fail('รองรับเฉพาะไฟล์ .xlsx และ .xlsm');
   status.textContent = '⏳ กำลังตรวจไฟล์...'; status.className = 'upload-status';
   loadSheetJS(() => {
     const reader = new FileReader();
@@ -1818,7 +1828,9 @@ document.getElementById('ghFileInput').addEventListener('change', function(e) {
         await parseExcel(buf, file.name);   // ตรวจว่าอ่านได้ก่อน และแสดงผลในหน้านี้
         const upKey = document.getElementById('upMonth').value;
         const fileKey = monthKey(scheduleData.year, scheduleData.month);
-        const upPath = 'schedule-' + upKey + '.xlsx';
+        const upExt = /\.xlsm$/i.test(file.name) ? 'xlsm' : 'xlsx';
+        const upPath = 'schedule-' + upKey + '.' + upExt;
+        const siblings = monthPaths(upKey).filter(x => x !== upPath);
         if (fileKey !== upKey && !confirm(`⚠️ ไฟล์นี้ดูเหมือนเป็นตารางของ ${scheduleData.month_name} แต่คุณเลือกอัปโหลดเป็น ${monthLabel(upKey)}\n\nกด OK ถ้ายืนยันจะอัปโหลดเป็น ${monthLabel(upKey)} / กด Cancel เพื่อกลับไปเลือกเดือนใหม่`)) { status.textContent = 'ยกเลิก — กรุณาเลือกเดือนของไฟล์ให้ตรงแล้วลองใหม่'; return; }
         if (!confirm(`อัปโหลด "${file.name}" เป็นตารางเวร ${monthLabel(upKey)} ขึ้น GitHub เพื่อให้ทุกคนเห็น?`)) { status.textContent = 'ยกเลิกการอัปโหลดขึ้น GitHub (ยังแสดงเฉพาะในเครื่องนี้)'; return; }
         const tok = await ghToken(); if (!tok) return fail('ไม่มี Token — ยังไม่ได้อัปโหลดขึ้น GitHub');
@@ -1832,6 +1844,14 @@ document.getElementById('ghFileInput').addEventListener('change', function(e) {
         const res = await fetch(api, {method: 'PUT', headers: H, body: JSON.stringify({
           message: `Update ${upPath} (${monthLabel(upKey)}) via web app`, content: bufToB64(buf), branch: 'main', ...(sha ? {sha} : {}) })});
         if (!res.ok) throw {status: res.status};
+        // ลบไฟล์เดิมของเดือนเดียวกันที่นามสกุลอื่น (.xlsx/.xlsm/schedule.xlsx) เพื่อไม่ให้เว็บอ่านไฟล์เก่าก่อน
+        for (const sib of siblings) {
+          try {
+            const sApi = `https://api.github.com/repos/${GH_REPO}/contents/${sib}`;
+            const g = await fetch(sApi + '?ref=main&t=' + Date.now(), {headers: H, cache: 'no-store'});
+            if (g.status === 200) await fetch(sApi, {method: 'DELETE', headers: H, body: JSON.stringify({message: `Remove old ${sib} (replaced by ${upPath})`, sha: (await g.json()).sha, branch: 'main'})});
+          } catch (e) {}
+        }
         status.textContent = `✅ อัปโหลดขึ้น GitHub แล้ว (${monthLabel(upKey)}) — คนอื่นจะเห็นภายใน 1–5 นาที`;
         status.className = 'upload-status ok';
         await loadMonthList(upKey); CUR_MONTH_KEY = upKey; document.getElementById('monthSelect').value = upKey; showScheduleUpdated(upPath);
