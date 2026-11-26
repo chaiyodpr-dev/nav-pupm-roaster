@@ -1281,7 +1281,9 @@ async function parseExcel(arrayBuffer, filename) {
         const v2 = r2row[ci] != null ? String(r2row[ci]).trim() : '';
         const v3 = r3row[ci] != null ? String(r3row[ci]).trim() : '';
         const v3up = v3.toUpperCase();
-        const vL = leaveRow && leaveRow[ci] != null ? String(leaveRow[ci]).trim() : '';
+        let vL = leaveRow && leaveRow[ci] != null ? String(leaveRow[ci]).trim() : '';
+        // x / X ในแถวลา = คนนี้รับแทนเวรไม่ได้เลยในวันนั้น (ไม่กระทบเวรหลัก)
+        const noSub = /^X$/i.test(vL); if (noSub) vL = '';
 
         // แถว3: ข้อความ MRN/ORN ตรงๆ ก่อน
         let main = v1 || 'O';
@@ -1326,13 +1328,20 @@ async function parseExcel(arrayBuffer, filename) {
         // แถวลา (เค้าโครง 4 แถว): nVL / eVL = ลาในช่วงปฏิบัติงานของกองนั้น (n=วช. e=วฟ. c=วส.)
         //   nZ / eZ = รับรองเวลาปฏิบัติงานเวรหลักโดยไม่ต้องทำงาน → ถือเป็น D (08:00-17:00)
         //   ถ้าแถว 2 มีข้อมูลของวันนั้น (เวรแทน/ครึ่งกะ/D/ลา) → แถว 2 ชนะแถวลาเสมอ
-        let leaveZ = null;
-        const row2Has = !!update || (mainDecoded && mainDecoded.type === 'day' && dayDec && dayDec.type === 'day');
-        if (vL && !row2Has) {
-          const vLu = vL.toUpperCase();
-          const lm = vLu.match(/^([NEC])?\s*(VL|VC|PL|SL)/);
-          if (lm) update = { type: 'leave', code: lm[2], leaveUnit: lm[1] ? UNIT_MAP[lm[1].toLowerCase()] : null };
-          else if (/Z/.test(vLu)) { main = 'D'; mainDecoded = { type: 'day', shift: 'D', unit: '', time: '08:00-17:00', raw: vL, fromZ: true }; }
+        // กฎ (24–26 พ.ย. 2569): แถวลา (VL/VC/PL/SL) = ลา "เวรหลัก" (แถว 1) เสมอ ; แถว 2 = สถานะอัปเดต คือไปรับเวรกะนั้นแทน (เวรแทน/ครึ่งกะ/D)
+        //   → ถ้ามีทั้งแถวลาและแถว 2 ที่เป็นเวรแทน/ครึ่งกะ: เวรหลักถือว่าลา (ไม่ทำ) ทำเฉพาะที่แถว 2 ระบุ
+        let leaveZ = null, leaveRef = null;
+        const vLu = vL.toUpperCase();
+        const lm = vL ? vLu.match(/^([NEC])?\s*(VL|VC|PL|SL)/) : null;
+        if (lm) {
+          const lu = { code: lm[2], leaveUnit: lm[1] ? UNIT_MAP[lm[1].toLowerCase()] : null };
+          if (!update && !(dayDec && dayDec.type === 'day')) update = { type: 'leave', ...lu };
+          else if (update && (update.type === 'half' || update.type === 'sub')) {
+            leaveRef = { ...lu, mainDecoded };   // เก็บเวรหลักเดิมไว้อธิบายเหตุผลการแทน
+            main = 'O'; mainDecoded = decodeShift('O', unitOverride);
+          }
+        } else if (vL && !update && !(dayDec && dayDec.type === 'day')) {
+          if (/Z/.test(vLu)) { main = 'D'; mainDecoded = { type: 'day', shift: 'D', unit: '', time: '08:00-17:00', raw: vL, fromZ: true }; }
           else leaveZ = vL;
         }
 
@@ -1340,7 +1349,7 @@ async function parseExcel(arrayBuffer, filename) {
         let note = leaveZ;
         if (v3 && v3up !== 'MRN' && v3up !== 'ORN') note = note ? note + ' / ' + v3 : v3;
 
-        schedule[d] = { main, mainDecoded, update, note, unitOverride, raw: {r1: v1, r2: v2, r3: v3} };
+        schedule[d] = { main, mainDecoded, update, note, unitOverride, leaveRef, noSub, raw: {r1: v1, r2: v2, r3: v3} };
       }
       const abbr = (r3row[NAME_COL] != null ? String(r3row[NAME_COL]).trim() : '');
       employees.push({ name, abbr, homeUnit: blockUnit, schedule });
@@ -1361,10 +1370,11 @@ async function parseExcel(arrayBuffer, filename) {
           const needs = [];
           for (const emp of employees) {
             const s = emp.schedule[dStr];
-            if (!s || !s.update || s.update.type !== 'leave') continue;
-            const md = s.mainDecoded;
-            if (md && md.type === 'work' && md.shift === sh && (s.update.leaveUnit || md.unit) === unit) {
-              needs.push({reason: 'leave', leaveOf: shortName(emp.name), leaveCode: s.update.code});
+            const lv = s && (s.update && s.update.type === 'leave' ? s.update : s.leaveRef);
+            if (!lv) continue;
+            const md = s.leaveRef ? s.leaveRef.mainDecoded : s.mainDecoded;
+            if (md && md.type === 'work' && md.shift === sh && (lv.leaveUnit || md.unit) === unit) {
+              needs.push({reason: 'leave', leaveOf: shortName(emp.name), leaveCode: lv.code});
             }
           }
           for (const v of vacancies) {
@@ -1557,16 +1567,16 @@ function openCheckModal() {
 function effectiveDay(emp, d) {
   const s = emp.schedule[String(d)];
   if (!s) return null;
-  const u = s.update;
-  if (u && u.type === 'leave') return {state: 'leave', code: u.code, shifts: []};
-  if (s.mainDecoded && s.mainDecoded.type === 'day') return {state: 'day', shifts: []};
+  const u = s.update, ns = !!s.noSub;
+  if (u && u.type === 'leave') return {state: 'leave', code: u.code, shifts: [], noSub: ns};
+  if (s.mainDecoded && s.mainDecoded.type === 'day') return {state: 'day', shifts: [], noSub: ns};
   const shifts = [];
   if (u && u.type === 'sub') shifts.push({shift: u.shift, unit: u.unit, label: u.raw});
   else {
     if (s.mainDecoded && s.mainDecoded.type === 'work') shifts.push({shift: s.mainDecoded.shift, unit: s.mainDecoded.unit, label: s.main});
     if (u && u.type === 'half') shifts.push({shift: u.shift, unit: u.unit, label: u.raw, half: u.half, time: u.time});
   }
-  return {state: shifts.length ? 'work' : 'off', shifts};
+  return {state: shifts.length ? 'work' : 'off', shifts, noSub: ns};
 }
 
 // ============================================================
@@ -1744,6 +1754,8 @@ function showLeaveSubs() {
       holders.push({name, label: cur.shifts.filter(x => x.shift === shift && x.unit === unit).map(x => x.label).join('+')});
       continue;
     }
+    // x ในแถวลา = คนนี้รับแทนเวรไม่ได้เลยในวันนั้น
+    if (cur.noSub) { no.push({name, why: 'มีเครื่องหมาย x — รับแทนเวรไม่ได้ในวันนี้'}); continue; }
     // ใบอนุญาต: ต้องมีใบอนุญาตของระบบงานนั้น
     if (!(LICENSES[unit] || []).includes(emp.abbr)) { no.push({name, why: `ไม่มีใบอนุญาต ${unit}`}); continue; }
     if (cur.state === 'leave') { no.push({name, why: `ลาอยู่แล้ว (${cur.code})`}); continue; }
